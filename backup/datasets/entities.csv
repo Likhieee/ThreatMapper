@@ -1,0 +1,24 @@
+report,threat_actor,malware
+F-Secure_Dukes_Whitepaper.txt,APT29,CosmicDuke
+F-Secure_Dukes_Whitepaper.txt,APT29,SeaDuke
+F-Secure_Dukes_Whitepaper.txt,APT29,MiniDuke
+MappingMITREToSandWormAPT.txt,Sandworm,NotPetya
+GrizzlySteppe.txt,APT29,CosmicDuke
+GrizzlySteppe.txt,APT29,SeaDuke
+GrizzlySteppe.txt,APT29,MiniDuke
+GrizzlySteppe.txt,Sandworm,CosmicDuke
+GrizzlySteppe.txt,Sandworm,SeaDuke
+GrizzlySteppe.txt,Sandworm,MiniDuke
+FIN6-Security_Intelligence_8.txt,FIN6,TrickBot
+FIN6-Security_Intelligence_8.txt,FIN6,Ryuk
+FIN6-Security_Intelligence_8.txt,FIN6,Emotet
+CrashOverride.txt,Sandworm,CrashOverride
+FIN6-Cyware.txt,FIN6,Ryuk
+WMIPowerShellBackdoors_POSHSPY.txt,APT29,POSHSPY
+Please Confirm You Received Our APT _ FortiGuard Labs .txt,APT34,Emotet
+Please Confirm You Received Our APT _ FortiGuard Labs .txt,OilRig,Emotet
+Pick-Six Intercepting a FIN6 Intrusion.txt,FIN6,Ryuk
+SixRussianGRUOfficers.txt,Sandworm,NotPetya
+What is Ryuk Ransomware_ The Complete Breakdown.txt,Wizard Spider,TrickBot
+What is Ryuk Ransomware_ The Complete Breakdown.txt,Wizard Spider,Ryuk
+What is Ryuk Ransomware_ The Complete Breakdown.txt,Wizard Spider,Emotet
