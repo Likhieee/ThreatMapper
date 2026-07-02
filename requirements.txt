@@ -3,3 +3,9 @@ uvicorn
 pandas
 requests
 python-multipart
+neo4j
+groq
+langchain
+langgraph
+python-dotenv
+scikit-learn
