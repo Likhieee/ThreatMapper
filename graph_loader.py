@@ -1,13 +1,17 @@
 from neo4j import GraphDatabase
 import pandas as pd
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # =====================================
 # Neo4j Connection
 # =====================================
 
-URI = "neo4j://127.0.0.1:7687"
-USERNAME = "neo4j"
-PASSWORD = "threat123"
+URI = os.getenv("NEO4J_URI")
+USERNAME = os.getenv("NEO4J_USERNAME")
+PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 driver = GraphDatabase.driver(
     URI,

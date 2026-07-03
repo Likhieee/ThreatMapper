@@ -12,5 +12,5 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./index_1.html:/usr/share/nginx/html/index.html
+      - ./threatmapper.html:/usr/share/nginx/html/index.html
     restart: always
