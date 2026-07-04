@@ -2,185 +2,132 @@ from neo4j import GraphDatabase
 import pandas as pd
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
-
-
-# =====================================
-# Neo4j Connection
-# =====================================
 
 URI = os.getenv("NEO4J_URI")
 USERNAME = os.getenv("NEO4J_USERNAME")
 PASSWORD = os.getenv("NEO4J_PASSWORD")
 
-driver = GraphDatabase.driver(
-    URI,
-    auth=(USERNAME, PASSWORD)
-)
+driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
+
+# =====================================
+# BATCH SIZE — processes 100 at a time
+# =====================================
+BATCH_SIZE = 100
+
+def batch_import(session, query, data, batch_size=BATCH_SIZE):
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i+batch_size]
+        session.run(query, rows=batch)
+        print(f"  Imported {min(i+batch_size, len(data))}/{len(data)}...", end='\r')
+    print()
 
 # =====================================
 # Import Threat Actors
 # =====================================
-
-actors = pd.read_csv("datasets/mitre_groups.csv")
-
+print("Importing Threat Actors...")
+actors = pd.read_csv("backup/datasets/mitre_groups.csv")
+actors_data = [
+    {"name": str(r["actor"]), "aliases": str(r["aliases"]), "description": str(r["description"])}
+    for _, r in actors.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in actors.iterrows():
-
-        session.run(
-            """
-            MERGE (a:ThreatActor {name:$name})
-
-            SET
-                a.aliases=$aliases,
-                a.description=$description
-            """,
-
-            name=str(row["actor"]),
-            aliases=str(row["aliases"]),
-            description=str(row["description"])
-        )
-
-print(f"✅ Threat Actors Imported : {actors['actor'].nunique()}")
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (a:ThreatActor {name: row.name})
+        SET a.aliases = row.aliases, a.description = row.description
+    """, actors_data)
+print(f"✅ Threat Actors Imported: {actors['actor'].nunique()}")
 
 # =====================================
 # Import Malware
 # =====================================
-
-malware = pd.read_csv("datasets/mitre_malware.csv")
-
+print("Importing Malware...")
+malware = pd.read_csv("backup/datasets/mitre_malware.csv")
+malware_data = [
+    {"name": str(r["malware"]), "description": str(r["description"])}
+    for _, r in malware.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in malware.iterrows():
-
-        session.run(
-            """
-            MERGE (m:Malware {name:$name})
-
-            SET
-                m.description=$description
-            """,
-
-            name=str(row["malware"]),
-            description=str(row["description"])
-        )
-
-print(f"✅ Malware Imported : {malware['malware'].nunique()}")
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (m:Malware {name: row.name})
+        SET m.description = row.description
+    """, malware_data)
+print(f"✅ Malware Imported: {malware['malware'].nunique()}")
 
 # =====================================
-# Import MITRE Techniques
+# Import Techniques
 # =====================================
-
-techniques = pd.read_csv("datasets/mitre_techniques.csv")
-
-# Ignore rows without technique_id
+print("Importing Techniques...")
+techniques = pd.read_csv("backup/datasets/mitre_techniques.csv")
 techniques = techniques.dropna(subset=["technique_id"])
-
+techniques_data = [
+    {"id": str(r["technique_id"]), "name": str(r["technique_name"]), "description": str(r["description"])}
+    for _, r in techniques.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in techniques.iterrows():
-
-        session.run(
-            """
-            MERGE (t:Technique {id:$id})
-
-            SET
-                t.name=$name,
-                t.description=$description
-            """,
-
-            id=str(row["technique_id"]),
-            name=str(row["technique_name"]),
-            description=str(row["description"])
-        )
-
-print(f"✅ Techniques Imported : {techniques['technique_id'].nunique()}")
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (t:Technique {id: row.id})
+        SET t.name = row.name, t.description = row.description
+    """, techniques_data)
+print(f"✅ Techniques Imported: {techniques['technique_id'].nunique()}")
 
 # =====================================
 # Import CVEs
 # =====================================
-
-cves = pd.read_csv("datasets/cves.csv")
-
+print("Importing CVEs...")
+cves = pd.read_csv("backup/datasets/cves.csv")
+cves_data = [
+    {"id": str(r["cve_id"]), "published": str(r["published"])}
+    for _, r in cves.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in cves.iterrows():
-
-        session.run(
-            """
-            MERGE (c:CVE {id:$id})
-
-            SET
-                c.published=$published
-            """,
-
-            id=str(row["cve_id"]),
-            published=str(row["published"])
-        )
-
-print(f"✅ CVEs Imported : {cves['cve_id'].nunique()}")
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (c:CVE {id: row.id})
+        SET c.published = row.published
+    """, cves_data)
+print(f"✅ CVEs Imported: {cves['cve_id'].nunique()}")
 
 # =====================================
 # Import IOCs
 # =====================================
-
-iocs = pd.read_csv("datasets/iocs.csv")
-
+print("Importing IOCs...")
+iocs = pd.read_csv("backup/datasets/iocs.csv")
+iocs_data = [
+    {"value": str(r["ioc"]), "type": str(r["ioc_type"]), "first_seen": str(r["first_seen"])}
+    for _, r in iocs.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in iocs.iterrows():
-
-        session.run(
-            """
-            MERGE (i:IOC {value:$value})
-
-            SET
-                i.type=$type,
-                i.first_seen=$first_seen
-            """,
-
-            value=str(row["ioc"]),
-            type=str(row["ioc_type"]),
-            first_seen=str(row["first_seen"])
-        )
-
-print(f"✅ IOCs Imported : {iocs['ioc'].nunique()}")
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (i:IOC {value: row.value})
+        SET i.type = row.type, i.first_seen = row.first_seen
+    """, iocs_data)
+print(f"✅ IOCs Imported: {iocs['ioc'].nunique()}")
 
 # =====================================
 # Import OTX Pulses
 # =====================================
-
-pulses = pd.read_csv("datasets/otx_pulses.csv")
-
+print("Importing OTX Pulses...")
+pulses = pd.read_csv("backup/datasets/otx_pulses.csv")
+pulses_data = [
+    {"name": str(r["pulse_name"]), "created": str(r["created"]), 
+     "modified": str(r["modified"]), "adversary": str(r["adversary"])}
+    for _, r in pulses.iterrows()
+]
 with driver.session() as session:
-
-    for _, row in pulses.iterrows():
-
-        session.run(
-            """
-            MERGE (p:Pulse {name:$name})
-
-            SET
-                p.created=$created,
-                p.modified=$modified,
-                p.adversary=$adversary
-            """,
-
-            name=str(row["pulse_name"]),
-            created=str(row["created"]),
-            modified=str(row["modified"]),
-            adversary=str(row["adversary"])
-        )
-
-print(f"✅ Pulses Imported : {pulses['pulse_name'].nunique()}")
-
-# =====================================
-# Close Connection
-# =====================================
+    batch_import(session, """
+        UNWIND $rows AS row
+        MERGE (p:Pulse {name: row.name})
+        SET p.created = row.created, p.modified = row.modified, p.adversary = row.adversary
+    """, pulses_data)
+print(f"✅ Pulses Imported: {pulses['pulse_name'].nunique()}")
 
 driver.close()
-
 print("\n===================================")
 print(" Knowledge Graph Node Import Done ")
 print("===================================")
