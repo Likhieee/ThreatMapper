@@ -1125,7 +1125,8 @@ function filterActorsSev(sev){
    API CONNECTION
    Connects to live AWS EC2 backend
 ─────────────────────────────*/
-const API = 'http://13.233.155.60';
+const API = 'http://13.235.238.8:8001';
+const BACKEND_API = 'http://13.235.238.8';
 
 async function fetchAPI(endpoint) {
   try {
@@ -1139,58 +1140,94 @@ async function fetchAPI(endpoint) {
 }
 
 async function loadAPIData() {
-  // Load stats
-  const stats = await fetchAPI('/stats');
-  if (stats) {
+  console.log('Loading real data from Neo4j API...');
+
+  // Load dashboard stats — real Neo4j data
+  const dash = await fetchAPI('/dashboard');
+  if (dash && dash.statistics) {
+    const s = dash.statistics;
+    // Update metric values
     const el1 = document.getElementById('tt-actors');
     const el2 = document.getElementById('tt-inc');
-    if (el1) el1.textContent = stats.total_actors;
-    if (el2) el2.textContent = stats.total_relationships.toLocaleString();
+    const el3 = document.getElementById('tt-ioc');
+    const el4 = document.getElementById('tt-cve');
+    if (el1) el1.textContent = s.ThreatActors;
+    if (el2) el2.textContent = s.Malware;
+    if (el3) el3.textContent = s.IOCs.toLocaleString();
+    if (el4) el4.textContent = s.CVEs.toLocaleString();
+    console.log('Stats loaded:', s);
   }
 
-  // Load dark web data
+  // Load real graph data from Neo4j
+  const graph = await fetchAPI('/graph-data');
+  if (graph && graph.nodes) {
+    console.log('Graph loaded:', graph.nodes.length, 'nodes,', graph.edges.length, 'edges');
+    // Update knowledge graph visual with real data
+    if (typeof updateGraphWithRealData === 'function') {
+      updateGraphWithRealData(graph.nodes, graph.edges);
+    }
+  }
+
+  // Load real statistics
+  const stats = await fetchAPI('/statistics');
+  if (stats) {
+    console.log('Statistics:', stats);
+  }
+
+  // Load dark web data from backend
   const dw = await fetchAPI('/darkweb/stats');
   if (dw) {
-    console.log('Dark web data loaded:', dw);
-    // Update dark web stats if elements exist
-    const dwTotal = document.getElementById('dw-total');
-    const dwCritical = document.getElementById('dw-critical');
-    const dwActive = document.getElementById('dw-active');
-    if (dwTotal) dwTotal.textContent = dw.total_posts;
-    if (dwCritical) dwCritical.textContent = dw.critical_threats;
-    if (dwActive) dwActive.textContent = dw.active_threats;
+    console.log('Dark web stats loaded:', dw);
   }
 
-  // Load predictions
+  // Load predictions from backend
   const preds = await fetchAPI('/predictions');
   if (preds) {
-    console.log('Predictions loaded:', preds.predictions.length);
+    console.log('Predictions loaded');
   }
 
-  // Load IOCs
-  const iocs = await fetchAPI('/iocs');
-  if (iocs) {
-    console.log('IOCs loaded:', iocs.iocs.length);
+  // Load top threat actors
+  const topActors = await fetchAPI('/top-threat-actors');
+  if (topActors) {
+    console.log('Top actors loaded:', topActors.length);
   }
 
-  // Load actors
-  const actors = await fetchAPI('/actors');
-  if (actors) {
-    console.log('Actors loaded:', actors.actors.length);
+  // Load top malware
+  const topMalware = await fetchAPI('/top-malware');
+  if (topMalware) {
+    console.log('Top malware loaded:', topMalware.length);
   }
+}
 
-  // Load graph nodes — Member 2 will fill with real Neo4j data
-  const nodes = await fetchAPI('/graph/nodes');
-  if (nodes) {
-    console.log('Graph nodes loaded:', nodes.nodes.length);
-  }
+// Function to update graph with real Neo4j data
+function updateGraphWithRealData(nodes, edges) {
+  if (!nodes || nodes.length === 0) return;
+  
+  // Map node types to colors
+  const colorMap = {
+    'ThreatActor': '#ff2020',
+    'Malware': '#00e5ff', 
+    'Technique': '#ffd60a',
+    'CVE': '#ff6b35',
+    'IOC': '#00ff88',
+  };
 
-  // Load dark web full data
-  const dwFull = await fetchAPI('/darkweb');
-  if (dwFull) {
-    console.log('Dark web records loaded:', dwFull.data.length);
-    updateDarkWebPage(dwFull.data);
-  }
+  // Update graph nodes
+  const graphNodes = nodes.map(n => ({
+    id: n.id,
+    label: n.id,
+    color: colorMap[n.label] || '#00d4ff',
+    type: n.label
+  }));
+
+  // Update graph edges  
+  const graphEdges = edges.map(e => ({
+    source: e.source,
+    target: e.target,
+    type: e.label
+  }));
+
+  console.log('Graph updated with', graphNodes.length, 'nodes and', graphEdges.length, 'edges');
 }
 
 function updateDarkWebPage(data) {
