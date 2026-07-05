@@ -1126,7 +1126,7 @@ function filterActorsSev(sev){
    Connects to live AWS EC2 backend
 ─────────────────────────────*/
 const API = 'http://13.235.238.8:8001';
-const BACKEND_API = 'http://13.235.238.8';
+const BACKEND_API = 'http://13.235.238.8:8080';
 
 async function fetchAPI(endpoint) {
   try {
@@ -1142,92 +1142,200 @@ async function fetchAPI(endpoint) {
 async function loadAPIData() {
   console.log('Loading real data from Neo4j API...');
 
-  // Load dashboard stats — real Neo4j data
+  // ── DASHBOARD STATS ──
   const dash = await fetchAPI('/dashboard');
   if (dash && dash.statistics) {
     const s = dash.statistics;
-    // Update metric values
-    const el1 = document.getElementById('tt-actors');
-    const el2 = document.getElementById('tt-inc');
-    const el3 = document.getElementById('tt-ioc');
-    const el4 = document.getElementById('tt-cve');
-    if (el1) el1.textContent = s.ThreatActors;
-    if (el2) el2.textContent = s.Malware;
-    if (el3) el3.textContent = s.IOCs.toLocaleString();
-    if (el4) el4.textContent = s.CVEs.toLocaleString();
-    console.log('Stats loaded:', s);
+    const els = {
+      'tt-actors': s.ThreatActors,
+      'tt-inc': s.Malware,
+      'tt-ioc': s.IOCs,
+      'tt-cve': s.CVEs
+    };
+    Object.entries(els).forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = typeof val === 'number' ? val.toLocaleString() : val;
+    });
   }
 
-  // Load real graph data from Neo4j
+  // ── REAL GRAPH DATA ──
   const graph = await fetchAPI('/graph-data');
   if (graph && graph.nodes) {
-    console.log('Graph loaded:', graph.nodes.length, 'nodes,', graph.edges.length, 'edges');
-    // Update knowledge graph visual with real data
-    if (typeof updateGraphWithRealData === 'function') {
-      updateGraphWithRealData(graph.nodes, graph.edges);
-    }
+    console.log('Graph:', graph.nodes.length, 'nodes,', graph.edges.length, 'edges');
+    renderRealGraph(graph.nodes, graph.edges);
   }
 
-  // Load real statistics
-  const stats = await fetchAPI('/statistics');
-  if (stats) {
-    console.log('Statistics:', stats);
-  }
-
-  // Load dark web data from backend
-  const dw = await fetchAPI('/darkweb/stats');
-  if (dw) {
-    console.log('Dark web stats loaded:', dw);
-  }
-
-  // Load predictions from backend
-  const preds = await fetchAPI('/predictions');
-  if (preds) {
-    console.log('Predictions loaded');
-  }
-
-  // Load top threat actors
+  // ── TOP THREAT ACTORS ──
   const topActors = await fetchAPI('/top-threat-actors');
-  if (topActors) {
-    console.log('Top actors loaded:', topActors.length);
+  if (topActors && topActors.length) {
+    console.log('Top actors:', topActors.length);
+    updateActorList(topActors);
   }
 
-  // Load top malware
+  // ── TOP MALWARE ──
   const topMalware = await fetchAPI('/top-malware');
-  if (topMalware) {
-    console.log('Top malware loaded:', topMalware.length);
+  if (topMalware && topMalware.length) {
+    console.log('Top malware:', topMalware.length);
+  }
+
+  // ── VULNERABILITIES ──
+  const iocs = await fetchAPI('/iocs');
+  if (iocs && iocs.length) {
+    console.log('IOCs:', iocs.length);
+    updateVulnerabilities(iocs);
+  }
+
+  // ── HIDDEN LINKS ──
+  const hidden = await fetchAPI('/hidden-links');
+  if (hidden) {
+    console.log('Hidden links loaded');
+  }
+
+  // ── SCORES ──
+  const scores = await fetchAPI('/scores');
+  if (scores) {
+    console.log('Scores loaded');
+    updatePredictions(scores);
+  }
+
+  // ── DARK WEB + PREDICTIONS from your backend ──
+  try {
+    const dw = await fetch(BACKEND_API + '/darkweb/stats').then(r=>r.json());
+    if (dw) console.log('Dark web stats:', dw);
+  } catch(e) { console.warn('Dark web API offline'); }
+
+  try {
+    const preds = await fetch(BACKEND_API + '/predictions').then(r=>r.json());
+    if (preds) console.log('Predictions loaded');
+  } catch(e) { console.warn('Predictions API offline'); }
+}
+
+// Update actor list with real data
+function updateActorList(actors) {
+  const container = document.getElementById('actor-list') || document.querySelector('.actor-list');
+  if (!container) return;
+  container.innerHTML = actors.slice(0,10).map(a => `
+    <div class="actor-row">
+      <span class="actor-name">${a.actor}</span>
+      <span class="actor-count">${a.malware_count} malware</span>
+    </div>
+  `).join('');
+}
+
+// Update vulnerabilities with real IOC data
+function updateVulnerabilities(iocs) {
+  const container = document.getElementById('vuln-list') || document.querySelector('.vuln-list');
+  if (!container) return;
+  container.innerHTML = iocs.slice(0,10).map(i => `
+    <div class="vuln-row">
+      <span>${i.value || i.ioc}</span>
+      <span class="vuln-type">${i.type || i.ioc_type}</span>
+    </div>
+  `).join('');
+}
+
+// Update predictions with scores
+function updatePredictions(scores) {
+  const container = document.getElementById('pred-list') || document.querySelector('.pred-list');
+  if (!container) return;
+  if (scores.actor_scores) {
+    container.innerHTML = scores.actor_scores.slice(0,5).map(s => `
+      <div class="pred-row">
+        <span>${s.actor}</span>
+        <span class="pred-score">${(s.score * 100).toFixed(0)}%</span>
+      </div>
+    `).join('');
   }
 }
 
-// Function to update graph with real Neo4j data
-function updateGraphWithRealData(nodes, edges) {
-  if (!nodes || nodes.length === 0) return;
+// Render real knowledge graph
+function renderRealGraph(nodes, edges) {
+  const canvas = document.getElementById('graphCanvas') || document.querySelector('canvas');
+  if (!canvas) return;
   
-  // Map node types to colors
   const colorMap = {
     'ThreatActor': '#ff2020',
-    'Malware': '#00e5ff', 
+    'Malware': '#00e5ff',
     'Technique': '#ffd60a',
     'CVE': '#ff6b35',
     'IOC': '#00ff88',
   };
 
-  // Update graph nodes
-  const graphNodes = nodes.map(n => ({
-    id: n.id,
+  // Store for graph rendering
+  window.realGraphNodes = nodes.map((n, i) => ({
+    id: i,
     label: n.id,
     color: colorMap[n.label] || '#00d4ff',
-    type: n.label
+    type: n.label,
+    x: Math.random(),
+    y: Math.random(),
+    vx: 0, vy: 0,
+    r: n.label === 'ThreatActor' ? 16 : 12
   }));
 
-  // Update graph edges  
-  const graphEdges = edges.map(e => ({
-    source: e.source,
-    target: e.target,
-    type: e.label
-  }));
+  window.realGraphEdges = edges.map(e => {
+    const src = window.realGraphNodes.findIndex(n => n.label === e.source);
+    const tgt = window.realGraphNodes.findIndex(n => n.label === e.target);
+    return src >= 0 && tgt >= 0 ? [src, tgt] : null;
+  }).filter(Boolean);
 
-  console.log('Graph updated with', graphNodes.length, 'nodes and', graphEdges.length, 'edges');
+  console.log('Real graph ready:', window.realGraphNodes.length, 'nodes');
+}
+
+// dummy placeholder to avoid error
+async function loadAPIData_original() {
+  // Load stats
+  const stats = await fetchAPI('/stats');
+  if (stats) {
+    const el1 = document.getElementById('tt-actors');
+    const el2 = document.getElementById('tt-inc');
+    if (el1) el1.textContent = stats.total_actors;
+    if (el2) el2.textContent = stats.total_relationships.toLocaleString();
+  }
+
+  // Load dark web data
+  const dw = await fetchAPI('/darkweb/stats');
+  if (dw) {
+    console.log('Dark web data loaded:', dw);
+    // Update dark web stats if elements exist
+    const dwTotal = document.getElementById('dw-total');
+    const dwCritical = document.getElementById('dw-critical');
+    const dwActive = document.getElementById('dw-active');
+    if (dwTotal) dwTotal.textContent = dw.total_posts;
+    if (dwCritical) dwCritical.textContent = dw.critical_threats;
+    if (dwActive) dwActive.textContent = dw.active_threats;
+  }
+
+  // Load predictions
+  const preds = await fetchAPI('/predictions');
+  if (preds) {
+    console.log('Predictions loaded:', preds.predictions.length);
+  }
+
+  // Load IOCs
+  const iocs = await fetchAPI('/iocs');
+  if (iocs) {
+    console.log('IOCs loaded:', iocs.iocs.length);
+  }
+
+  // Load actors
+  const actors = await fetchAPI('/actors');
+  if (actors) {
+    console.log('Actors loaded:', actors.actors.length);
+  }
+
+  // Load graph nodes — Member 2 will fill with real Neo4j data
+  const nodes = await fetchAPI('/graph/nodes');
+  if (nodes) {
+    console.log('Graph nodes loaded:', nodes.nodes.length);
+  }
+
+  // Load dark web full data
+  const dwFull = await fetchAPI('/darkweb');
+  if (dwFull) {
+    console.log('Dark web records loaded:', dwFull.data.length);
+    updateDarkWebPage(dwFull.data);
+  }
 }
 
 function updateDarkWebPage(data) {
