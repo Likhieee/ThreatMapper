@@ -382,7 +382,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div class="sidebar-footer">
       <div class="sys-row"><span>SCRAPER</span><span class="sys-ok">● ONLINE</span></div>
       <div class="sys-row"><span>NEO4J</span><span class="sys-ok">● ONLINE</span></div>
-      <div class="sys-row"><span>ML MODEL</span><span class="sys-warn">● UPDATING</span></div>
+      <div class="sys-row"><span>ML MODEL</span><span class="sys-ok">● ONLINE</span></div>
       <div class="sys-row"><span>AWS EC2</span><span class="sys-ok">● ONLINE</span></div>
       <div class="sys-row"><span>LAMBDA</span><span class="sys-ok">● ONLINE</span></div>
     </div>
@@ -675,7 +675,7 @@ function nav(id,el){
 const BOOT_LINES=[
   'Initializing ThreatMapper AI Engine v2.4.1...',
   'Loading NLP models: spaCy + BERT-large-uncased...',
-  'Connecting to Neo4j graph database — neo4j://localhost:7687...',
+  'Connecting to Neo4j Aura Cloud — neo4j+s://0fe30a1e.databases.neo4j.io...',
   'AWS Lambda functions: ONLINE (us-east-1)',
   'Loading IOC database: 18,439 indicators...',
   'Connecting OSINT sources: AlienVault OTX, VirusTotal, Shodan...',
@@ -1384,9 +1384,322 @@ setTimeout(() => {
   });
 }, 3000);
 
+
+/* ═══════════════════════════════════════
+   KNOWLEDGE GRAPH — Real Neo4j Data
+═══════════════════════════════════════ */
+let kgNodes=[], kgEdges=[], kgAnim;
+
+function initGraph(){
+  const canvas = document.getElementById('graph-canvas');
+  if(canvas){ canvas.width = canvas.offsetWidth || 800; }
+  loadKGData();
+}
+
+async function loadKGData(){
+  try{
+    const data = await fetch(API+'/graph-data').then(r=>r.json());
+    if(!data||!data.nodes||data.nodes.length===0){ console.warn('No graph data'); return; }
+
+    const colorMap = {
+      'ThreatActor':'#00d4ff','Malware':'#ff2d55',
+      'Technique':'#ff6b35','CVE':'#bf5af2','IOC':'#00ff88'
+    };
+
+    const canvas = document.getElementById('graph-canvas');
+    if(!canvas) return;
+    canvas.width = canvas.offsetWidth || 800;
+    const H = canvas.height || 500;
+
+    kgNodes = data.nodes.slice(0,80).map((n,i)=>({
+      id:i, label: n.id.length>10 ? n.id.substring(0,10) : n.id,
+      full: n.id, type: n.label,
+      color: colorMap[n.label]||'#00d4ff',
+      x: 50+Math.random()*(canvas.width-100),
+      y: 50+Math.random()*(H-100),
+      vx:0, vy:0,
+      r: n.label==='ThreatActor'?14:10
+    }));
+
+    const nodeMap={};
+    kgNodes.forEach(n=>nodeMap[n.full]=n.id);
+
+    kgEdges = data.edges.slice(0,150).map(e=>{
+      const s=nodeMap[e.source], t=nodeMap[e.target];
+      return (s!==undefined&&t!==undefined)?[s,t]:null;
+    }).filter(Boolean);
+
+    cancelAnimationFrame(kgAnim);
+    drawKG();
+    console.log('Graph rendered:',kgNodes.length,'nodes',kgEdges.length,'edges');
+  }catch(e){ console.warn('Graph error:',e); }
+}
+
+function gfilt(type){
+  loadKGData();
+}
+
+function drawKG(){
+  const canvas = document.getElementById('graph-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height||500;
+  let t=0;
+
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    t+=0.5;
+
+    // Simple force
+    kgNodes.forEach(a=>{
+      kgNodes.forEach(b=>{
+        if(a===b)return;
+        const dx=a.x-b.x, dy=a.y-b.y;
+        const d=Math.sqrt(dx*dx+dy*dy)||1;
+        if(d<120){ const f=400/(d*d); a.vx+=f*dx/d; a.vy+=f*dy/d; }
+      });
+    });
+    kgEdges.forEach(([i,j])=>{
+      const a=kgNodes[i],b=kgNodes[j]; if(!a||!b)return;
+      const dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+      const f=(d-90)*0.002;
+      a.vx+=f*dx/d; a.vy+=f*dy/d; b.vx-=f*dx/d; b.vy-=f*dy/d;
+    });
+    kgNodes.forEach(n=>{
+      n.vx*=0.88; n.vy*=0.88;
+      n.x+=n.vx; n.y+=n.vy;
+      n.x=Math.max(n.r+5,Math.min(W-n.r-5,n.x));
+      n.y=Math.max(n.r+5,Math.min(H-n.r-5,n.y));
+    });
+
+    // Edges
+    kgEdges.forEach(([i,j])=>{
+      const a=kgNodes[i],b=kgNodes[j]; if(!a||!b)return;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle='rgba(0,212,255,0.12)'; ctx.lineWidth=0.8; ctx.stroke();
+      const fr=((t*0.4+i*15)%100)/100;
+      const px=a.x+(b.x-a.x)*fr, py=a.y+(b.y-a.y)*fr;
+      ctx.beginPath(); ctx.arc(px,py,2,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,212,255,0.5)'; ctx.fill();
+    });
+
+    // Nodes
+    kgNodes.forEach(n=>{
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+3,0,Math.PI*2);
+      ctx.fillStyle=n.color+'15'; ctx.fill();
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+      ctx.fillStyle=n.color+'25'; ctx.fill();
+      ctx.strokeStyle=n.color; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle=n.color; ctx.font='7px Share Tech Mono';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(n.label,n.x,n.y);
+    });
+
+    kgAnim=requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+/* ═══════════════════════════════════════
+   HIDDEN LINKS — Core Feature!
+═══════════════════════════════════════ */
+function initGraph_extra(){
+  loadHiddenLinks();
+}
+
+async function loadHiddenLinks(){
+  try{
+    const data = await fetch(API+'/hidden-links').then(r=>r.json());
+    console.log('Hidden links raw:', data);
+
+    // Try to find the hidden links container
+    let container = document.getElementById('hidden-links-container');
+    if(!container){
+      // Add it to the graph page
+      const graphPage = document.getElementById('page-graph');
+      if(graphPage){
+        const div = document.createElement('div');
+        div.className='panel';
+        div.style.cssText='margin-top:14px;padding:16px';
+        div.innerHTML=`
+          <div class="ph"><span class="pt" style="color:var(--cyan)">◈ AI HIDDEN LINK DISCOVERY — ACTORS SHARING SAME MALWARE</span></div>
+          <div id="hidden-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;max-height:300px;overflow-y:auto"></div>
+        `;
+        graphPage.appendChild(div);
+        container = document.getElementById('hidden-links-container');
+      }
+    }
+
+    if(!container) return;
+
+    // Handle different response formats
+    const links = Array.isArray(data) ? data : (data.links || data.hidden_links || data.results || []);
+
+    if(links.length===0){
+      container.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:11px;padding:10px">No hidden links found yet — relationships still being mapped...</div>';
+      return;
+    }
+
+    container.innerHTML = links.slice(0,20).map((link,i)=>{
+      const actor1 = link.actor1 || link.source || link[0] || 'Unknown';
+      const actor2 = link.actor2 || link.target || link[1] || 'Unknown';
+      const shared = link.shared_malware || link.shared || link.malware || [];
+      const sharedList = Array.isArray(shared) ? shared.join(', ') : shared;
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;
+          padding:10px 12px;border:1px solid rgba(0,212,255,0.2);border-left:3px solid var(--cyan);
+          background:rgba(0,212,255,0.04);font-family:var(--mono);font-size:11px">
+          <div>
+            <span style="color:var(--red);font-weight:700">${actor1}</span>
+            <span style="color:var(--text3);margin:0 8px">←→</span>
+            <span style="color:var(--red);font-weight:700">${actor2}</span>
+            <div style="color:var(--text3);font-size:9px;margin-top:4px">
+              SHARED MALWARE: <span style="color:var(--orange)">${sharedList || 'N/A'}</span>
+            </div>
+          </div>
+          <span style="color:var(--cyan);font-size:9px;border:1px solid var(--cyan);padding:2px 8px">LINKED</span>
+        </div>
+      `;
+    }).join('');
+
+    console.log('Hidden links displayed:', links.length);
+  }catch(e){ console.warn('Hidden links error:',e); }
+}
+
+/* ═══════════════════════════════════════
+   PREDICTIONS — Real Scores
+═══════════════════════════════════════ */
+function initPredictions(){
+  loadPredictions();
+}
+
+async function loadPredictions(){
+  try{
+    const scores = await fetch(API+'/scores').then(r=>r.json()).catch(()=>null);
+    const preds = await fetch(BACKEND_API+'/predictions').then(r=>r.json()).catch(()=>null);
+
+    const cards = document.getElementById('pred-cards');
+    if(!cards) return;
+
+    let items = [];
+    if(scores && Array.isArray(scores) && scores.length>0){
+      items = scores.map(s=>({
+        label: s.actor || s.name,
+        value: Math.round((s.score||0)*100),
+        sub: 'THREAT SCORE'
+      }));
+    } else if(preds && preds.predictions){
+      items = preds.predictions.map(p=>({
+        label: p.sector,
+        value: p.risk,
+        sub: 'via '+p.actor
+      }));
+    }
+
+    if(items.length>0){
+      cards.innerHTML = items.slice(0,6).map(item=>`
+        <div class="panel" style="padding:14px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);letter-spacing:1px;margin-bottom:6px">${item.label}</div>
+          <div style="font-family:var(--title);font-size:26px;font-weight:900;color:var(--red)">${item.value}%</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${item.sub}</div>
+          <div style="height:3px;background:var(--border2);margin-top:8px;border-radius:1px;overflow:hidden">
+            <div style="height:100%;width:${item.value}%;background:linear-gradient(90deg,var(--red),var(--orange));border-radius:1px;transition:width 1s"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }catch(e){ console.warn('Predictions error:',e); }
+}
+
+/* ═══════════════════════════════════════
+   VULNERABILITIES — Real IOC/CVE Data
+═══════════════════════════════════════ */
+function initVulns(){
+  loadVulnData();
+}
+
+async function loadVulnData(){
+  try{
+    const data = await fetch(API+'/iocs').then(r=>r.json()).catch(()=>null);
+    const cveList = document.getElementById('cve-list');
+    if(!cveList||!data) return;
+
+    const items = Array.isArray(data)?data:(data.iocs||data.data||[]);
+    cveList.innerHTML = items.slice(0,50).map(ioc=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;
+        padding:8px 10px;border:1px solid var(--border);border-radius:2px;
+        font-family:var(--mono);font-size:10px;background:var(--panel);gap:10px">
+        <span style="color:var(--cyan);flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${ioc.value||ioc.ioc||'Unknown'}
+        </span>
+        <span style="color:var(--text3);flex:1">${ioc.type||ioc.ioc_type||'IOC'}</span>
+        <span style="color:var(--red);border:1px solid var(--red);padding:1px 6px;font-size:9px">HIGH</span>
+      </div>
+    `).join('');
+    console.log('Vulns loaded:',items.length);
+  }catch(e){ console.warn('Vuln error:',e); }
+}
+
+/* ═══════════════════════════════════════
+   DARK WEB — Synthetic Data
+═══════════════════════════════════════ */
+function initDarkWeb(){
+  loadDarkWebData();
+}
+
+async function loadDarkWebData(){
+  try{
+    const data = await fetch(BACKEND_API+'/darkweb').then(r=>r.json()).catch(()=>null);
+    if(!data) return;
+
+    const records = data.data||[];
+    const cards = document.getElementById('dw-cards');
+    const credTable = document.getElementById('cred-table');
+
+    if(cards && records.length>0){
+      cards.innerHTML = records.slice(0,8).map(d=>`
+        <div class="panel" style="padding:12px;border-left:3px solid var(--purple)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--purple)">${d.forum_source}</span>
+            <span style="font-size:9px;color:var(--text3)">${d.post_date}</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-bottom:6px">
+            <span style="color:var(--red)">${d.actor_alias}</span> targeting 
+            <span style="color:var(--orange)">${d.target_sector}</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span style="font-size:9px;color:var(--text3);border:1px solid var(--border);padding:1px 6px">${d.tool_advertised}</span>
+            <span style="font-size:9px;color:var(--yellow);border:1px solid var(--yellow);padding:1px 6px">${d.price_btc} BTC</span>
+            <span style="font-size:9px;color:${d.severity==='Critical'?'var(--red)':'var(--orange)'};border:1px solid currentColor;padding:1px 6px">${d.severity}</span>
+            <span style="font-size:9px;color:${d.verified?'var(--green)':'var(--text3)'};border:1px solid currentColor;padding:1px 6px">${d.verified?'VERIFIED':'UNVERIFIED'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if(credTable && records.length>0){
+      credTable.innerHTML = records.slice(0,10).map(d=>`
+        <tr>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--cyan)">${d.data_type_leaked}</td>
+          <td style="color:var(--red)">${d.records_count.toLocaleString()}</td>
+          <td style="color:var(--text3)">${d.post_date}</td>
+        </tr>
+      `).join('');
+    }
+
+    console.log('Dark web loaded:',records.length);
+  }catch(e){ console.warn('Dark web error:',e); }
+}
+
+
 /* Wire PAGE_INIT after all functions defined */
 PAGE_INIT.overview=initOverview;
 PAGE_INIT.actors=initActors;
+PAGE_INIT.graph=function(){ initGraph(); setTimeout(initGraph_extra,1000); };
+PAGE_INIT.predictions=initPredictions;
+PAGE_INIT.vulns=initVulns;
+PAGE_INIT.ioc=initVulns;
+PAGE_INIT.darkweb=initDarkWeb;
 
 </script>
 </body>
