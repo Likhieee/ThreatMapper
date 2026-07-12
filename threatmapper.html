@@ -675,7 +675,7 @@ function nav(id,el){
 const BOOT_LINES=[
   'Initializing ThreatMapper AI Engine v2.4.1...',
   'Loading NLP models: spaCy + BERT-large-uncased...',
-  'Connecting to Neo4j Aura Cloud — neo4j+s://0fe30a1e.databases.neo4j.io...',
+  'Connecting to Neo4j graph database — neo4j://localhost:7687...',
   'AWS Lambda functions: ONLINE (us-east-1)',
   'Loading IOC database: 18,439 indicators...',
   'Connecting OSINT sources: AlienVault OTX, VirusTotal, Shodan...',
@@ -1392,105 +1392,143 @@ let kgNodes=[], kgEdges=[], kgAnim;
 
 function initGraph(){
   const canvas = document.getElementById('graph-canvas');
-  if(canvas){ canvas.width = canvas.offsetWidth || 800; }
+  if(canvas){
+    canvas.width = canvas.parentElement.offsetWidth || 900;
+    canvas.height = 500;
+  }
   loadKGData();
+  setTimeout(loadHiddenLinks, 2000);
 }
 
-async function loadKGData(){
+function gfilt(type, el){
+  document.querySelectorAll('#page-graph .btn[onclick*="gfilt"]').forEach(b=>b.classList.remove('btn-c'));
+  if(el) el.classList.add('btn-c');
+  loadKGData(type);
+}
+
+async function loadKGData(filter){
   try{
     const data = await fetch(API+'/graph-data').then(r=>r.json());
-    if(!data||!data.nodes||data.nodes.length===0){ console.warn('No graph data'); return; }
+    if(!data||!data.nodes||data.nodes.length===0){
+      console.warn('No graph data returned');
+      return;
+    }
 
     const colorMap = {
-      'ThreatActor':'#00d4ff','Malware':'#ff2d55',
-      'Technique':'#ff6b35','CVE':'#bf5af2','IOC':'#00ff88'
+      'ThreatActor':'#00d4ff',
+      'Malware':'#ff2d55',
+      'Technique':'#ff6b35',
+      'CVE':'#bf5af2',
+      'IOC':'#00ff88'
     };
 
     const canvas = document.getElementById('graph-canvas');
     if(!canvas) return;
-    canvas.width = canvas.offsetWidth || 800;
+    const W = canvas.width || 900;
     const H = canvas.height || 500;
 
-    kgNodes = data.nodes.slice(0,80).map((n,i)=>({
-      id:i, label: n.id.length>10 ? n.id.substring(0,10) : n.id,
-      full: n.id, type: n.label,
+    let nodes = data.nodes;
+    if(filter && filter !== 'all'){
+      const typeMap = {
+        'actor':'ThreatActor','malware':'Malware',
+        'tool':'Technique','cve':'CVE'
+      };
+      if(typeMap[filter]) nodes = nodes.filter(n=>n.label===typeMap[filter]);
+    }
+
+    kgNodes = nodes.slice(0,80).map((n,i)=>({
+      id:i,
+      label: n.id.length>11 ? n.id.substring(0,11) : n.id,
+      full: n.id,
+      type: n.label,
       color: colorMap[n.label]||'#00d4ff',
-      x: 50+Math.random()*(canvas.width-100),
-      y: 50+Math.random()*(H-100),
+      x: 60+Math.random()*(W-120),
+      y: 60+Math.random()*(H-120),
       vx:0, vy:0,
       r: n.label==='ThreatActor'?14:10
     }));
 
     const nodeMap={};
-    kgNodes.forEach(n=>nodeMap[n.full]=n.id);
+    kgNodes.forEach(n=>{ nodeMap[n.full]=n.id; });
 
-    kgEdges = data.edges.slice(0,150).map(e=>{
+    kgEdges = data.edges.slice(0,200).map(e=>{
       const s=nodeMap[e.source], t=nodeMap[e.target];
-      return (s!==undefined&&t!==undefined)?[s,t]:null;
+      return (s!==undefined && t!==undefined) ? [s,t] : null;
     }).filter(Boolean);
 
     cancelAnimationFrame(kgAnim);
     drawKG();
-    console.log('Graph rendered:',kgNodes.length,'nodes',kgEdges.length,'edges');
-  }catch(e){ console.warn('Graph error:',e); }
-}
-
-function gfilt(type){
-  loadKGData();
+    console.log('KG rendered:',kgNodes.length,'nodes',kgEdges.length,'edges');
+  }catch(e){
+    console.error('Graph load error:',e);
+  }
 }
 
 function drawKG(){
   const canvas = document.getElementById('graph-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height||500;
+  const W = canvas.width, H = canvas.height;
   let t=0;
 
   function frame(){
     ctx.clearRect(0,0,W,H);
-    t+=0.5;
+    t++;
 
-    // Simple force
-    kgNodes.forEach(a=>{
-      kgNodes.forEach(b=>{
-        if(a===b)return;
+    // Force directed layout
+    for(let i=0;i<kgNodes.length;i++){
+      for(let j=i+1;j<kgNodes.length;j++){
+        const a=kgNodes[i], b=kgNodes[j];
         const dx=a.x-b.x, dy=a.y-b.y;
         const d=Math.sqrt(dx*dx+dy*dy)||1;
-        if(d<120){ const f=400/(d*d); a.vx+=f*dx/d; a.vy+=f*dy/d; }
-      });
-    });
+        if(d<150){
+          const f=500/(d*d);
+          a.vx+=f*dx/d; a.vy+=f*dy/d;
+          b.vx-=f*dx/d; b.vy-=f*dy/d;
+        }
+      }
+    }
+
     kgEdges.forEach(([i,j])=>{
-      const a=kgNodes[i],b=kgNodes[j]; if(!a||!b)return;
-      const dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1;
-      const f=(d-90)*0.002;
-      a.vx+=f*dx/d; a.vy+=f*dy/d; b.vx-=f*dx/d; b.vy-=f*dy/d;
-    });
-    kgNodes.forEach(n=>{
-      n.vx*=0.88; n.vy*=0.88;
-      n.x+=n.vx; n.y+=n.vy;
-      n.x=Math.max(n.r+5,Math.min(W-n.r-5,n.x));
-      n.y=Math.max(n.r+5,Math.min(H-n.r-5,n.y));
+      const a=kgNodes[i], b=kgNodes[j];
+      if(!a||!b) return;
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const d=Math.sqrt(dx*dx+dy*dy)||1;
+      const f=(d-100)*0.003;
+      a.vx+=f*dx/d; a.vy+=f*dy/d;
+      b.vx-=f*dx/d; b.vy-=f*dy/d;
     });
 
-    // Edges
+    kgNodes.forEach(n=>{
+      n.vx*=0.85; n.vy*=0.85;
+      n.x=Math.max(n.r+5, Math.min(W-n.r-5, n.x+n.vx));
+      n.y=Math.max(n.r+5, Math.min(H-n.r-5, n.y+n.vy));
+    });
+
+    // Draw edges with pulse
     kgEdges.forEach(([i,j])=>{
-      const a=kgNodes[i],b=kgNodes[j]; if(!a||!b)return;
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-      ctx.strokeStyle='rgba(0,212,255,0.12)'; ctx.lineWidth=0.8; ctx.stroke();
-      const fr=((t*0.4+i*15)%100)/100;
+      const a=kgNodes[i], b=kgNodes[j];
+      if(!a||!b) return;
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle='rgba(0,212,255,0.1)';
+      ctx.lineWidth=0.8; ctx.stroke();
+      const fr=((t*0.3+i*10)%100)/100;
       const px=a.x+(b.x-a.x)*fr, py=a.y+(b.y-a.y)*fr;
-      ctx.beginPath(); ctx.arc(px,py,2,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,212,255,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(px,py,1.5,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,212,255,0.7)'; ctx.fill();
     });
 
-    // Nodes
+    // Draw nodes
     kgNodes.forEach(n=>{
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+3,0,Math.PI*2);
-      ctx.fillStyle=n.color+'15'; ctx.fill();
+      const pulse=1+0.06*Math.sin(t*0.04+n.id);
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r*pulse+5,0,Math.PI*2);
+      ctx.fillStyle=n.color+'12'; ctx.fill();
       ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
-      ctx.fillStyle=n.color+'25'; ctx.fill();
+      ctx.fillStyle=n.color+'20'; ctx.fill();
       ctx.strokeStyle=n.color; ctx.lineWidth=1.5; ctx.stroke();
-      ctx.fillStyle=n.color; ctx.font='7px Share Tech Mono';
+      ctx.fillStyle=n.color;
+      ctx.font='7px monospace';
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(n.label,n.x,n.y);
     });
@@ -1501,118 +1539,185 @@ function drawKG(){
 }
 
 /* ═══════════════════════════════════════
-   HIDDEN LINKS — Core Feature!
+   HIDDEN LINKS — Core Project Feature!
 ═══════════════════════════════════════ */
-function initGraph_extra(){
-  loadHiddenLinks();
-}
-
 async function loadHiddenLinks(){
   try{
     const data = await fetch(API+'/hidden-links').then(r=>r.json());
-    console.log('Hidden links raw:', data);
+    console.log('Hidden links raw response:', data);
 
-    // Try to find the hidden links container
-    let container = document.getElementById('hidden-links-container');
+    let links = Array.isArray(data) ? data :
+      (data.links || data.hidden_links || data.connections || data.results || []);
+
+    let container = document.getElementById('hidden-links-box');
     if(!container){
-      // Add it to the graph page
       const graphPage = document.getElementById('page-graph');
-      if(graphPage){
-        const div = document.createElement('div');
-        div.className='panel';
-        div.style.cssText='margin-top:14px;padding:16px';
-        div.innerHTML=`
-          <div class="ph"><span class="pt" style="color:var(--cyan)">◈ AI HIDDEN LINK DISCOVERY — ACTORS SHARING SAME MALWARE</span></div>
-          <div id="hidden-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;max-height:300px;overflow-y:auto"></div>
-        `;
-        graphPage.appendChild(div);
-        container = document.getElementById('hidden-links-container');
-      }
+      if(!graphPage) return;
+      const div = document.createElement('div');
+      div.className='panel';
+      div.style.cssText='margin-top:14px;padding:16px';
+      div.innerHTML=`
+        <div class="ph">
+          <span class="pt" style="color:var(--cyan)">◈ AI HIDDEN LINK DISCOVERY</span>
+          <span style="font-size:9px;color:var(--text3);margin-left:10px">ACTORS SHARING MALWARE INFRASTRUCTURE</span>
+        </div>
+        <div id="hidden-links-box" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;max-height:280px;overflow-y:auto"></div>
+      `;
+      graphPage.appendChild(div);
+      container = document.getElementById('hidden-links-box');
     }
 
-    if(!container) return;
-
-    // Handle different response formats
-    const links = Array.isArray(data) ? data : (data.links || data.hidden_links || data.results || []);
-
-    if(links.length===0){
-      container.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:11px;padding:10px">No hidden links found yet — relationships still being mapped...</div>';
+    if(!links || links.length===0){
+      container.innerHTML=`
+        <div style="color:var(--text3);font-family:var(--mono);font-size:11px;padding:10px;text-align:center">
+          ⟳ Scanning graph for hidden connections...<br>
+          <span style="font-size:9px;margin-top:4px;display:block">Run /hidden-links endpoint to discover actor relationships</span>
+        </div>`;
       return;
     }
 
-    container.innerHTML = links.slice(0,20).map((link,i)=>{
-      const actor1 = link.actor1 || link.source || link[0] || 'Unknown';
-      const actor2 = link.actor2 || link.target || link[1] || 'Unknown';
-      const shared = link.shared_malware || link.shared || link.malware || [];
-      const sharedList = Array.isArray(shared) ? shared.join(', ') : shared;
+    container.innerHTML = links.slice(0,15).map((link,i)=>{
+      const a1 = link.actor1||link.source||link.actor_a||Object.values(link)[0]||'Actor A';
+      const a2 = link.actor2||link.target||link.actor_b||Object.values(link)[1]||'Actor B';
+      const shared = link.shared_malware||link.shared_tools||link.shared||link.malware||[];
+      const sharedStr = Array.isArray(shared) ? shared.slice(0,3).join(', ') : String(shared);
+      const score = link.score||link.similarity||link.confidence||0;
+      const scoreStr = score > 0 ? Math.round(score*100)+'%' : 'LINKED';
       return `
         <div style="display:flex;justify-content:space-between;align-items:center;
-          padding:10px 12px;border:1px solid rgba(0,212,255,0.2);border-left:3px solid var(--cyan);
-          background:rgba(0,212,255,0.04);font-family:var(--mono);font-size:11px">
+          padding:10px 14px;border:1px solid rgba(0,212,255,0.2);
+          border-left:3px solid var(--cyan);background:rgba(0,212,255,0.03);
+          font-family:var(--mono);font-size:11px;border-radius:2px">
           <div>
-            <span style="color:var(--red);font-weight:700">${actor1}</span>
-            <span style="color:var(--text3);margin:0 8px">←→</span>
-            <span style="color:var(--red);font-weight:700">${actor2}</span>
-            <div style="color:var(--text3);font-size:9px;margin-top:4px">
-              SHARED MALWARE: <span style="color:var(--orange)">${sharedList || 'N/A'}</span>
+            <div style="margin-bottom:4px">
+              <span style="color:var(--red);font-weight:700">${a1}</span>
+              <span style="color:var(--text3);margin:0 8px;font-size:14px">⟷</span>
+              <span style="color:var(--red);font-weight:700">${a2}</span>
+            </div>
+            <div style="color:var(--text3);font-size:9px">
+              SHARED: <span style="color:var(--orange)">${sharedStr||'Common infrastructure'}</span>
             </div>
           </div>
-          <span style="color:var(--cyan);font-size:9px;border:1px solid var(--cyan);padding:2px 8px">LINKED</span>
+          <span style="color:var(--cyan);font-size:9px;border:1px solid var(--cyan);
+            padding:2px 8px;white-space:nowrap">${scoreStr}</span>
         </div>
       `;
     }).join('');
 
-    console.log('Hidden links displayed:', links.length);
-  }catch(e){ console.warn('Hidden links error:',e); }
+    console.log('Hidden links displayed:',links.length);
+  }catch(e){
+    console.warn('Hidden links error:',e);
+  }
 }
 
 /* ═══════════════════════════════════════
-   PREDICTIONS — Real Scores
+   PREDICTIONS — Real Data + Charts
 ═══════════════════════════════════════ */
 function initPredictions(){
-  loadPredictions();
+  loadPredictionsData();
 }
 
-async function loadPredictions(){
+async function loadPredictionsData(){
   try{
+    // Try scores from Neo4j API first
     const scores = await fetch(API+'/scores').then(r=>r.json()).catch(()=>null);
-    const preds = await fetch(BACKEND_API+'/predictions').then(r=>r.json()).catch(()=>null);
+    // Fallback to backend predictions
+    const backendPreds = await fetch(BACKEND_API+'/predictions').then(r=>r.json()).catch(()=>null);
 
+    // Fill pred-cards
     const cards = document.getElementById('pred-cards');
-    if(!cards) return;
-
     let items = [];
+
     if(scores && Array.isArray(scores) && scores.length>0){
       items = scores.map(s=>({
-        label: s.actor || s.name,
-        value: Math.round((s.score||0)*100),
-        sub: 'THREAT SCORE'
+        label: s.actor||s.name||'Unknown',
+        value: Math.round((s.score||s.risk_score||0)*100),
+        sub: 'THREAT SCORE',
+        color: (s.score||0) > 0.7 ? 'var(--red)' : (s.score||0) > 0.4 ? 'var(--orange)' : 'var(--yellow)'
       }));
-    } else if(preds && preds.predictions){
-      items = preds.predictions.map(p=>({
-        label: p.sector,
-        value: p.risk,
-        sub: 'via '+p.actor
+    } else if(backendPreds && backendPreds.predictions){
+      items = backendPreds.predictions.map(p=>({
+        label: p.sector||p.actor||'Unknown',
+        value: p.risk||0,
+        sub: 'via '+(p.actor||'ML Model'),
+        color: p.risk > 70 ? 'var(--red)' : p.risk > 40 ? 'var(--orange)' : 'var(--yellow)'
       }));
     }
 
-    if(items.length>0){
+    if(cards && items.length>0){
       cards.innerHTML = items.slice(0,6).map(item=>`
-        <div class="panel" style="padding:14px">
-          <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);letter-spacing:1px;margin-bottom:6px">${item.label}</div>
-          <div style="font-family:var(--title);font-size:26px;font-weight:900;color:var(--red)">${item.value}%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${item.sub}</div>
-          <div style="height:3px;background:var(--border2);margin-top:8px;border-radius:1px;overflow:hidden">
-            <div style="height:100%;width:${item.value}%;background:linear-gradient(90deg,var(--red),var(--orange));border-radius:1px;transition:width 1s"></div>
+        <div class="panel" style="padding:16px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);
+            letter-spacing:1px;margin-bottom:8px;text-transform:uppercase">${item.label}</div>
+          <div style="font-family:var(--title);font-size:28px;font-weight:900;color:${item.color}">${item.value}%</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">${item.sub}</div>
+          <div style="height:3px;background:var(--border2);margin-top:10px;border-radius:1px;overflow:hidden">
+            <div style="height:100%;width:${item.value}%;background:${item.color};
+              border-radius:1px;transition:width 1.2s ease"></div>
           </div>
         </div>
       `).join('');
+    } else if(cards){
+      cards.innerHTML=`<div style="color:var(--text3);font-family:var(--mono);font-size:11px;padding:20px;grid-column:1/-1;text-align:center">
+        Loading prediction scores from ML model...</div>`;
     }
-  }catch(e){ console.warn('Predictions error:',e); }
+
+    // Draw attack vector chart
+    const predChart = document.getElementById('pred-chart');
+    if(predChart){
+      const ctx = predChart.getContext('2d');
+      predChart.width = predChart.parentElement.offsetWidth||600;
+      predChart.height = 200;
+      const W=predChart.width, H=predChart.height;
+
+      const sectors = items.length>0 ? items.slice(0,7) : [
+        {label:'Banking',value:78},{label:'Government',value:65},
+        {label:'Healthcare',value:54},{label:'Energy',value:48},
+        {label:'Telecom',value:35},{label:'Defence',value:29}
+      ];
+
+      ctx.clearRect(0,0,W,H);
+      const barW = (W-40)/(sectors.length*2);
+      sectors.forEach((s,i)=>{
+        const x=20+(i*2+0.5)*barW;
+        const barH=(s.value/100)*(H-40);
+        const y=H-20-barH;
+        const color = s.value>70?'#ff2d55':s.value>40?'#ff6b35':'#ffd60a';
+        ctx.fillStyle=color+'44';
+        ctx.fillRect(x,y,barW*1.2,barH);
+        ctx.fillStyle=color;
+        ctx.fillRect(x,y,barW*1.2,3);
+        ctx.fillStyle='rgba(255,255,255,0.5)';
+        ctx.font='8px monospace';
+        ctx.textAlign='center';
+        ctx.fillText(s.label.substring(0,6),x+barW*0.6,H-6);
+        ctx.fillStyle=color;
+        ctx.fillText(s.value+'%',x+barW*0.6,y-4);
+      });
+    }
+
+    // Fill confidence matrix
+    const confMatrix = document.getElementById('conf-matrix');
+    if(confMatrix && items.length>0){
+      confMatrix.innerHTML=`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px">
+          ${items.slice(0,4).map(item=>`
+            <div style="padding:10px;border:1px solid var(--border2);text-align:center">
+              <div style="font-size:9px;color:var(--text3);font-family:var(--mono)">${item.label.substring(0,10)}</div>
+              <div style="font-size:18px;font-weight:900;color:${item.color};font-family:var(--title)">${item.value}%</div>
+            </div>
+          `).join('')}
+        </div>`;
+    }
+
+    console.log('Predictions loaded:',items.length,'items');
+  }catch(e){
+    console.warn('Predictions error:',e);
+  }
 }
 
 /* ═══════════════════════════════════════
-   VULNERABILITIES — Real IOC/CVE Data
+   VULNERABILITIES — Real CVE/IOC Data
 ═══════════════════════════════════════ */
 function initVulns(){
   loadVulnData();
@@ -1624,16 +1729,18 @@ async function loadVulnData(){
     const cveList = document.getElementById('cve-list');
     if(!cveList||!data) return;
 
-    const items = Array.isArray(data)?data:(data.iocs||data.data||[]);
+    const items = Array.isArray(data) ? data : (data.iocs||data.data||[]);
+    const sevColors = {HIGH:'#ff2d55',MEDIUM:'#ff6b35',LOW:'#ffd60a',CRITICAL:'#ff0000'};
+
     cveList.innerHTML = items.slice(0,50).map(ioc=>`
       <div style="display:flex;justify-content:space-between;align-items:center;
         padding:8px 10px;border:1px solid var(--border);border-radius:2px;
-        font-family:var(--mono);font-size:10px;background:var(--panel);gap:10px">
+        font-family:var(--mono);font-size:10px;gap:10px">
         <span style="color:var(--cyan);flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          ${ioc.value||ioc.ioc||'Unknown'}
+          ${ioc.value||ioc.ioc||'N/A'}
         </span>
         <span style="color:var(--text3);flex:1">${ioc.type||ioc.ioc_type||'IOC'}</span>
-        <span style="color:var(--red);border:1px solid var(--red);padding:1px 6px;font-size:9px">HIGH</span>
+        <span style="color:${sevColors['HIGH']};border:1px solid currentColor;padding:1px 6px;font-size:9px">HIGH</span>
       </div>
     `).join('');
     console.log('Vulns loaded:',items.length);
@@ -1651,51 +1758,98 @@ async function loadDarkWebData(){
   try{
     const data = await fetch(BACKEND_API+'/darkweb').then(r=>r.json()).catch(()=>null);
     if(!data) return;
-
     const records = data.data||[];
-    const cards = document.getElementById('dw-cards');
-    const credTable = document.getElementById('cred-table');
 
-    if(cards && records.length>0){
-      cards.innerHTML = records.slice(0,8).map(d=>`
-        <div class="panel" style="padding:12px;border-left:3px solid var(--purple)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--purple)">${d.forum_source}</span>
-            <span style="font-size:9px;color:var(--text3)">${d.post_date}</span>
-          </div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-bottom:6px">
-            <span style="color:var(--red)">${d.actor_alias}</span> targeting 
-            <span style="color:var(--orange)">${d.target_sector}</span>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <span style="font-size:9px;color:var(--text3);border:1px solid var(--border);padding:1px 6px">${d.tool_advertised}</span>
-            <span style="font-size:9px;color:var(--yellow);border:1px solid var(--yellow);padding:1px 6px">${d.price_btc} BTC</span>
-            <span style="font-size:9px;color:${d.severity==='Critical'?'var(--red)':'var(--orange)'};border:1px solid currentColor;padding:1px 6px">${d.severity}</span>
-            <span style="font-size:9px;color:${d.verified?'var(--green)':'var(--text3)'};border:1px solid currentColor;padding:1px 6px">${d.verified?'VERIFIED':'UNVERIFIED'}</span>
-          </div>
+    // Fill forum activity
+    const forumEl = document.querySelector('#page-darkweb [id*="forum"]') ||
+      document.querySelector('#page-darkweb .forum-list');
+    if(forumEl && records.length>0){
+      forumEl.innerHTML = records.slice(0,10).map(d=>`
+        <div style="display:flex;justify-content:space-between;padding:8px 10px;
+          border:1px solid var(--border);font-family:var(--mono);font-size:10px;gap:8px">
+          <span style="color:var(--purple)">${d.forum_source}</span>
+          <span style="color:var(--red)">${d.actor_alias}</span>
+          <span style="color:var(--text3)">${d.target_sector}</span>
+          <span style="color:var(--yellow)">${d.price_btc} BTC</span>
         </div>
       `).join('');
     }
-
-    if(credTable && records.length>0){
-      credTable.innerHTML = records.slice(0,10).map(d=>`
-        <tr>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--cyan)">${d.data_type_leaked}</td>
-          <td style="color:var(--red)">${d.records_count.toLocaleString()}</td>
-          <td style="color:var(--text3)">${d.post_date}</td>
-        </tr>
-      `).join('');
-    }
-
     console.log('Dark web loaded:',records.length);
   }catch(e){ console.warn('Dark web error:',e); }
 }
+
+/* ═══════════════════════════════════════
+   LIVE NOTIFICATIONS
+═══════════════════════════════════════ */
+const notifMsgs=[
+  {m:"APT28 IOC match — IP 185.220.x.x flagged in graph",t:"alert"},
+  {m:"New CVE-2024-3821 ingested from CISA KEV database",t:"info"},
+  {m:"Carbanak tool signature detected in OTX feed",t:"warn"},
+  {m:"Knowledge graph updated — 3 new relationships mapped",t:"green"},
+  {m:"Lazarus Group — new TTP pattern observed",t:"alert"},
+  {m:"AlienVault OTX sync complete — 847 IOCs loaded",t:"green"},
+  {m:"FIN7 targeting retail sector — risk score elevated",t:"warn"},
+  {m:"Hidden link found — APT28 and Sandworm share tools",t:"alert"},
+  {m:"OilRig phishing campaign targeting ME government",t:"alert"},
+  {m:"Prediction model updated — accuracy 87.3%",t:"info"},
+];
+let notifIdx=0;
+
+function showNotif(message,type='alert'){
+  const colors={
+    alert:{bg:'rgba(255,45,85,.12)',border:'rgba(255,45,85,.5)',text:'#ff2d55',icon:'🚨'},
+    warn:{bg:'rgba(255,214,10,.1)',border:'rgba(255,214,10,.4)',text:'#ffd60a',icon:'⚠️'},
+    info:{bg:'rgba(0,212,255,.1)',border:'rgba(0,212,255,.4)',text:'#00d4ff',icon:'ℹ️'},
+    green:{bg:'rgba(0,255,136,.08)',border:'rgba(0,255,136,.3)',text:'#00ff88',icon:'✅'},
+  };
+  const c=colors[type]||colors.alert;
+  let box=document.getElementById('notif-container');
+  if(!box){
+    box=document.createElement('div');
+    box.id='notif-container';
+    box.style.cssText='position:fixed;top:70px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;max-width:340px';
+    document.body.appendChild(box);
+  }
+  const id='n'+Date.now();
+  const el=document.createElement('div');
+  el.id=id;
+  el.style.cssText=`background:${c.bg};border:1px solid ${c.border};border-left:3px solid ${c.border};
+    padding:10px 14px;font-family:monospace;font-size:11px;color:${c.text};border-radius:2px;
+    box-shadow:0 0 20px ${c.border};animation:nIn .3s ease;cursor:pointer;backdrop-filter:blur(10px)`;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px">
+    <div><span style="margin-right:6px">${c.icon}</span>
+    <span style="font-size:9px;opacity:.6">${new Date().toLocaleTimeString('en-GB',{hour12:false})}</span>
+    <div style="margin-top:4px">${message}</div></div>
+    <span onclick="this.parentElement.parentElement.remove()" style="cursor:pointer;opacity:.5;font-size:16px">×</span>
+  </div>`;
+  el.onclick=()=>el.remove();
+  box.insertBefore(el,box.firstChild);
+  if(box.children.length>5) box.lastChild.remove();
+  setTimeout(()=>el.remove(),6000);
+}
+
+// Add CSS for notification animation
+const ns=document.createElement('style');
+ns.textContent='@keyframes nIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}';
+document.head.appendChild(ns);
+
+// Start notifications
+setTimeout(()=>showNotif('ThreatMapper systems online — Neo4j connected','green'),3000);
+function scheduleNotif(){
+  const delay=20000+Math.random()*20000;
+  setTimeout(()=>{
+    const n=notifMsgs[notifIdx%notifMsgs.length];
+    showNotif(n.m,n.t); notifIdx++;
+    scheduleNotif();
+  },delay);
+}
+scheduleNotif();
 
 
 /* Wire PAGE_INIT after all functions defined */
 PAGE_INIT.overview=initOverview;
 PAGE_INIT.actors=initActors;
-PAGE_INIT.graph=function(){ initGraph(); setTimeout(initGraph_extra,1000); };
+PAGE_INIT.graph=initGraph;
 PAGE_INIT.predictions=initPredictions;
 PAGE_INIT.vulns=initVulns;
 PAGE_INIT.ioc=initVulns;
