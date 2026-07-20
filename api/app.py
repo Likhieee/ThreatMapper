@@ -132,14 +132,36 @@ def get_iocs():
         result = session.run("""
 
             MATCH (i:IOC)
+            OPTIONAL MATCH (i)-[:INDICATES]->(m:Malware)<-[:USES]-(a:ThreatActor)
 
-            RETURN i.value AS ioc
+            RETURN
+                i.value AS value,
+                i.type  AS type,
+                collect(DISTINCT a.name)[0] AS actor,
+                collect(DISTINCT m.name)[0] AS malware
 
             LIMIT 100
 
         """)
 
-        return [r["ioc"] for r in result]
+        import re as _re
+        rows = []
+        for r in result:
+            val = r["value"] or ""
+            ioc_type = r["type"] or (
+                "CVE"    if val.upper().startswith("CVE-") else
+                "IP"     if _re.match(r"^\d{1,3}(\.\d{1,3}){3}", val) else
+                "HASH"   if len(val) in (32, 40, 64) and all(c in "0123456789abcdefABCDEF" for c in val) else
+                "DOMAIN"
+            )
+            rows.append({
+                "value":    val,
+                "type":     ioc_type,
+                "actor":    r["actor"]   or "Unknown",
+                "malware":  r["malware"] or "—",
+                "severity": "HIGH",
+            })
+        return rows
 
 
 # -------------------------------------------------------
@@ -341,6 +363,8 @@ def pulse_details(name: str):
 # -------------------------------------------------------
 # GRAPH VISUALIZATION
 # -------------------------------------------------------
+
+
 
 @app.get("/graph-data")
 def graph_data():
