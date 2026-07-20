@@ -1,6 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useAPI, BACKEND } from '../hooks/useAPI';
 import { Card, MetricCard, Loading, Btn, ProgressBar, Tag, Empty } from '../components/UI';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
 
 // Static fallback: realistic sector threat predictions
 const FALLBACK = [
@@ -12,10 +15,23 @@ const FALLBACK = [
   {sector:'Asia Pacific Tech', risk:24, actor:'APT34',         confidence:'LOW',    timeframe:'90 days'},
 ];
 
+// Custom tooltip for the bar chart
+function RiskTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const c = (d.risk||0) > 70 ? '#f03e3e' : (d.risk||0) > 40 ? '#f97316' : '#eab308';
+  return (
+    <div style={{background:'var(--panel)',border:`1px solid ${c}`,borderRadius:6,padding:'8px 12px',fontFamily:'var(--mono)',fontSize:11}}>
+      <div style={{color:'var(--text2)',marginBottom:4}}>{d.sector}</div>
+      <div style={{color:c,fontWeight:700,fontSize:16}}>{d.risk}%</div>
+      {d.actor && <div style={{color:'var(--text3)',fontSize:10,marginTop:2}}>via {d.actor}</div>}
+    </div>
+  );
+}
+
 export default function Predictions() {
   // /predictions returns: { predictions: [{sector, risk, actor, confidence, timeframe}] }
   const { data, loading, refetch } = useAPI('/predictions', BACKEND);
-  const chartRef = useRef();
 
   // Normalise data: prefer live API, fall back to static list
   const raw = data?.predictions;
@@ -28,44 +44,6 @@ export default function Predictions() {
     return u === 'HIGH' ? 'red' : u === 'MEDIUM' ? 'orange' : 'yellow';
   };
 
-  // Bar chart
-  useEffect(() => {
-    if (!chartRef.current || !items.length) return;
-    const canvas = chartRef.current;
-    canvas.width  = canvas.parentElement.offsetWidth;
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = 180;
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'var(--bg)';
-    ctx.fillRect(0, 0, W, H);
-
-    // Grid lines
-    [25, 50, 75, 100].forEach(v => {
-      const y = H - 20 - (v / 100) * (H - 40);
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W - 10, y); ctx.stroke();
-      ctx.fillStyle = 'var(--text3)'; ctx.font = '8px JetBrains Mono'; ctx.textAlign = 'right';
-      ctx.fillText(v + '%', 18, y + 3);
-    });
-
-    const n  = items.length;
-    const bw = (W - 40) / (n * 2);
-
-    items.forEach((item, i) => {
-      const v = item.risk || 0;
-      const c = v > 70 ? '#f03e3e' : v > 40 ? '#f97316' : '#eab308';
-      const bh = (v / 100) * (H - 40);
-      const x  = 20 + (i * 2 + 0.5) * bw;
-      const y  = H - 20 - bh;
-      ctx.fillStyle = c + '33'; ctx.fillRect(x, y, bw * 1.2, bh);
-      ctx.fillStyle = c;        ctx.fillRect(x, y, bw * 1.2, 3);
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '8px JetBrains Mono'; ctx.textAlign = 'center';
-      const lbl = (item.sector || '').substring(0, 9);
-      ctx.fillText(lbl, x + bw * 0.6, H - 6);
-      ctx.fillStyle = c;
-      ctx.fillText(v + '%', x + bw * 0.6, y - 5);
-    });
-  }, [items]);
 
   // Summary stats
   const highRisk   = items.filter(i => (i.risk || 0) >= 70).length;
@@ -121,8 +99,36 @@ export default function Predictions() {
           </div>
 
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-            <Card title="Attack Vector Trends (90 Days)">
-              <canvas ref={chartRef} height={180} style={{width:'100%'}}/>
+            <Card title="Sector Risk Forecast (90 Days)">
+              <ResponsiveContainer width="100%" height={190}>
+                <BarChart data={items} margin={{top:10,right:10,left:-10,bottom:30}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
+                  <XAxis
+                    dataKey="sector"
+                    tick={{fill:'rgba(255,255,255,0.4)',fontSize:9,fontFamily:'JetBrains Mono'}}
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                    tickLine={false}
+                    axisLine={{stroke:'rgba(255,255,255,0.1)'}}
+                  />
+                  <YAxis
+                    domain={[0,100]}
+                    tick={{fill:'rgba(255,255,255,0.3)',fontSize:9,fontFamily:'JetBrains Mono'}}
+                    tickFormatter={v => v+'%'}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip content={<RiskTooltip/>} cursor={{fill:'rgba(255,255,255,0.03)'}}/>
+                  <Bar dataKey="risk" radius={[3,3,0,0]} maxBarSize={48}>
+                    {items.map((item, i) => {
+                      const v = item.risk || 0;
+                      const c = v > 70 ? '#f03e3e' : v > 40 ? '#f97316' : '#eab308';
+                      return <Cell key={i} fill={c} fillOpacity={0.85}/>;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </Card>
 
             <Card title="Sector Risk Matrix">
