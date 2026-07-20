@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAPI, BACKEND } from '../hooks/useAPI';
+import { useAPI } from '../hooks/useAPI';
 import { Card, Loading, Tag, Btn, DataTable, MetricCard, Empty } from '../components/UI';
 
 const FALLBACK_IOCS = [
@@ -86,33 +86,30 @@ const SEVERITY_COLORS = {
 };
 
 export default function Vulnerabilities() {
-  const { data: apiData, loading }    = useAPI('/iocs');
-  const { data: backendData }         = useAPI('/iocs', BACKEND);
-  const [filter, setFilter]           = useState('all');
+  const { data: apiData, loading } = useAPI('/iocs');
+  const [filter, setFilter]        = useState('all');
 
-  // /iocs from real API returns string[], from backend returns {iocs:[...objects]}
+  // /iocs returns either enriched objects {value,type,actor,...} or plain strings
   let iocs = [];
   if (Array.isArray(apiData) && apiData.length > 0) {
     if (typeof apiData[0] === 'string') {
-      // Real API: plain IOC value strings — wrap into display objects
+      // Old API format: plain string values — wrap into display objects
       iocs = apiData.map(val => ({
-        type: val.startsWith('CVE') ? 'CVE'
-             : /^\d{1,3}(\.\d{1,3}){3}$/.test(val) ? 'IP'
-             : val.includes('.') && !val.includes(' ') ? 'DOMAIN'
-             : 'IOC',
-        value: val,
-        severity: 'HIGH',
-        actor: '—',
+        type:       val.toUpperCase().startsWith('CVE-') ? 'CVE'
+                  : /^\d{1,3}(\.\d{1,3}){3}/.test(val)  ? 'IP'
+                  : val.includes('.') && !val.includes(' ') ? 'DOMAIN'
+                  : 'IOC',
+        value:      val,
+        severity:   'HIGH',
+        actor:      '—',
         first_seen: '—',
-        last_seen: '—',
+        last_seen:  '—',
       }));
     } else {
-      iocs = apiData; // already objects
+      iocs = apiData; // enriched objects from updated /iocs endpoint
     }
-  } else if (backendData?.iocs?.length > 0) {
-    iocs = backendData.iocs;
   } else {
-    iocs = FALLBACK_IOCS;
+    iocs = FALLBACK_IOCS; // 80-item comprehensive fallback
   }
 
   const filtered = filter === 'all'
