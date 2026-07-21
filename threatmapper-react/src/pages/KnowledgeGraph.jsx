@@ -28,7 +28,7 @@ export default function KnowledgeGraph() {
     const H = container.offsetHeight;
 
     // Filter nodes
-    const typeMap = { actor:'ThreatActor', malware:'Malware', technique:'Technique', cve:'CVE' };
+    const typeMap = { actor:'ThreatActor', malware:'Malware', technique:'Technique', cve:'CVE', ioc:'IOC' };
     const nodes = f === 'all' ? [...allNodes] : allNodes.filter(n => n.label === (typeMap[f] || f));
     const nodeIds = new Set(nodes.map(n => n.id));
     const edges = allEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
@@ -85,13 +85,13 @@ export default function KnowledgeGraph() {
 
     // Glow circle
     node.append('circle')
-      .attr('r', d => d.label === 'ThreatActor' ? 18 : d.label === 'Malware' ? 14 : 10)
+      .attr('r', d => d.label === 'ThreatActor' ? 18 : d.label === 'Malware' ? 14 : d.label === 'IOC' ? 9 : 12)
       .attr('fill', d => `url(#grad-${d.label})`)
       .attr('stroke', 'none');
 
     // Main circle
     node.append('circle')
-      .attr('r', d => d.label === 'ThreatActor' ? 12 : d.label === 'Malware' ? 9 : 7)
+      .attr('r', d => d.label === 'ThreatActor' ? 12 : d.label === 'Malware' ? 9 : d.label === 'IOC' ? 6 : 7)
       .attr('fill', d => (COLORS[d.label] || '#22d3ee') + '22')
       .attr('stroke', d => COLORS[d.label] || '#22d3ee')
       .attr('stroke-width', 1.5);
@@ -113,7 +113,7 @@ export default function KnowledgeGraph() {
     svg.on('click', () => setSelected(null));
   }
 
-  const filters = ['all', 'actor', 'malware', 'technique', 'cve'];
+  const filters = ['all', 'actor', 'malware', 'technique', 'cve', 'ioc'];
 
   return (
     <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden',padding:20,gap:12}}>

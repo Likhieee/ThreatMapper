@@ -495,51 +495,105 @@ def pulse_details(name: str):
 
 @app.get("/graph-data")
 def graph_data():
+    nodes = {}
+    edges = []
 
     with driver.session() as session:
 
-        result = session.run("""
-
-            MATCH (a:ThreatActor)-[r:USES]->(m:Malware)
-
-            RETURN
-                a.name AS actor,
-                m.name AS malware
-
+        # ── 1. ThreatActor ──► Malware (USES) ─────────────────────────────
+        res = session.run("""
+            MATCH (a:ThreatActor)-[:USES]->(m:Malware)
+            RETURN a.name AS actor, a.description AS actor_desc,
+                   m.name AS malware, m.description AS mal_desc
+            LIMIT 400
         """)
+        for r in res:
+            a, m = r["actor"], r["malware"]
+            if a:
+                nodes[a] = {"id": a, "label": "ThreatActor",
+                            "description": (r["actor_desc"] or "")[:120]}
+            if m:
+                nodes[m] = {"id": m, "label": "Malware",
+                            "description": (r["mal_desc"] or "")[:120]}
+            if a and m:
+                edges.append({"source": a, "target": m, "label": "USES"})
 
-        nodes = {}
-        edges = []
+        # ── 2. ThreatActor ──► Technique (USES) ───────────────────────────
+        res2 = session.run("""
+            MATCH (a:ThreatActor)-[:USES]->(t:Technique)
+            RETURN a.name AS actor, t.id AS tech_id,
+                   t.name AS tech_name, t.description AS tech_desc
+            LIMIT 350
+        """)
+        for r in res2:
+            a    = r["actor"]
+            tid  = r["tech_id"]  or ""
+            name = r["tech_name"] or tid
+            disp = name[:30]  # keep display label short
+            if a and a not in nodes:
+                nodes[a] = {"id": a, "label": "ThreatActor", "description": ""}
+            if tid:
+                nodes[tid] = {"id": tid, "label": "Technique",
+                              "description": f"{name}: {(r['tech_desc'] or '')[:100]}"}
+                if a:
+                    edges.append({"source": a, "target": tid, "label": "USES"})
 
-        for record in result:
+        # ── 3. IOC ──► Malware (INDICATES) ────────────────────────────────
+        res3 = session.run("""
+            MATCH (i:IOC)-[:INDICATES]->(m:Malware)
+            RETURN i.value AS ioc, i.type AS ioc_type,
+                   i.first_seen AS first_seen, m.name AS malware
+            LIMIT 80
+        """)
+        for r in res3:
+            ioc = r["ioc"]
+            m   = r["malware"]
+            if ioc:
+                nodes[ioc] = {"id": ioc, "label": "IOC",
+                              "description": f"Type: {r['ioc_type'] or 'unknown'} | First seen: {r['first_seen'] or '?'}"}
+            if m and m not in nodes:
+                nodes[m] = {"id": m, "label": "Malware", "description": ""}
+            if ioc and m:
+                edges.append({"source": ioc, "target": m, "label": "INDICATES"})
 
-            actor = record["actor"]
-            malware = record["malware"]
-
-            nodes[actor] = {
-                "id": actor,
-                "label": "ThreatActor"
-            }
-
-            nodes[malware] = {
-                "id": malware,
-                "label": "Malware"
-            }
-
-            edges.append({
-
-                "source": actor,
-                "target": malware,
-                "label": "USES"
-
-            })
-
-        return {
-
-            "nodes": list(nodes.values()),
-            "edges": edges
-
+        # ── 4. CVE nodes — synthetic edges via known associations ──────────
+        CVE_EDGES = [
+            ("WannaCry",     "CVE-2017-0144"), ("WannaCry",     "CVE-2017-0145"),
+            ("NotPetya",     "CVE-2017-0144"), ("Industroyer2", "CVE-2022-30190"),
+            ("Cobalt Strike","CVE-2021-44228"),("Cobalt Strike", "CVE-2021-40444"),
+            ("BlackCat",     "CVE-2021-31207"),("BlackByte",    "CVE-2022-26134"),
+            ("TrickBot",     "CVE-2020-0796"), ("Emotet",       "CVE-2017-11882"),
+            ("LockBit",      "CVE-2023-4966"), ("BlackEnergy",  "CVE-2014-4114"),
+            ("Lazarus",      "CVE-2021-44228"),("MATA",         "CVE-2021-26855"),
+            ("PlugX",        "CVE-2023-23397"),("Zebrocy",      "CVE-2021-34473"),
+        ]
+        CVE_DESC = {
+            "CVE-2017-0144":"EternalBlue — SMBv1 RCE (MS17-010)",
+            "CVE-2017-0145":"EternalRomance — SMB RCE",
+            "CVE-2022-30190":"Follina — MSDT RCE",
+            "CVE-2021-44228":"Log4Shell — Apache Log4j RCE",
+            "CVE-2021-40444":"MSHTML RCE via Office",
+            "CVE-2021-31207":"ProxyShell — Exchange RCE",
+            "CVE-2022-26134":"Confluence OGNL Injection",
+            "CVE-2020-0796": "SMBGhost — SMBv3 RCE",
+            "CVE-2017-11882":"Office Equation Editor RCE",
+            "CVE-2023-4966": "Citrix Bleed — Session Token Leak",
+            "CVE-2014-4114": "Black Energy OLE Vuln",
+            "CVE-2021-26855":"ProxyLogon — Exchange SSRF",
+            "CVE-2023-23397":"Outlook NTLM Hash Theft",
+            "CVE-2021-34473":"ProxyShell Exchange RCE",
         }
+        for malware_name, cve_id in CVE_EDGES:
+            nodes[cve_id] = {"id": cve_id, "label": "CVE",
+                             "description": CVE_DESC.get(cve_id, "")}
+            if malware_name in nodes:
+                edges.append({"source": malware_name, "target": cve_id, "label": "EXPLOITS"})
+
+    return {
+        "nodes": list(nodes.values()),
+        "edges": edges
+    }
+
     
 @app.get("/malware/{name}")
 def malware_details(name: str):
