@@ -500,12 +500,12 @@ def graph_data():
 
     with driver.session() as session:
 
-        # ── 1. ThreatActor ──► Malware (USES) ─────────────────────────────
+        # ── 1. ThreatActor ──► Malware (USES) — original dense graph ─────
         res = session.run("""
             MATCH (a:ThreatActor)-[:USES]->(m:Malware)
             RETURN a.name AS actor, a.description AS actor_desc,
                    m.name AS malware, m.description AS mal_desc
-            LIMIT 150
+            LIMIT 400
         """)
         for r in res:
             a, m = r["actor"], r["malware"]
@@ -519,16 +519,17 @@ def graph_data():
                 edges.append({"source": a, "target": m, "label": "USES"})
 
 
-        # ── 2. ThreatActor ──► Technique (USES) ───────────────────────────
+        # ── 2. ThreatActor ──► Technique (USES) — max 2 per actor (distributed) ──
         res2 = session.run("""
             MATCH (a:ThreatActor)-[:USES]->(t:Technique)
+            WITH a, collect(t)[0..2] AS sample_techs
+            UNWIND sample_techs AS t
             RETURN a.name AS actor, t.id AS tech_id,
                    t.name AS tech_name, t.description AS tech_desc
-            LIMIT 80
         """)
         for r in res2:
             a    = r["actor"]
-            tid  = r["tech_id"]  or ""
+            tid  = r["tech_id"] or ""
             name = r["tech_name"] or tid
             if a and a not in nodes:
                 nodes[a] = {"id": a, "label": "ThreatActor", "description": ""}
