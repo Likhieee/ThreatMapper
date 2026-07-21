@@ -505,7 +505,7 @@ def graph_data():
             MATCH (a:ThreatActor)-[:USES]->(m:Malware)
             RETURN a.name AS actor, a.description AS actor_desc,
                    m.name AS malware, m.description AS mal_desc
-            LIMIT 400
+            LIMIT 150
         """)
         for r in res:
             a, m = r["actor"], r["malware"]
@@ -518,18 +518,18 @@ def graph_data():
             if a and m:
                 edges.append({"source": a, "target": m, "label": "USES"})
 
+
         # ── 2. ThreatActor ──► Technique (USES) ───────────────────────────
         res2 = session.run("""
             MATCH (a:ThreatActor)-[:USES]->(t:Technique)
             RETURN a.name AS actor, t.id AS tech_id,
                    t.name AS tech_name, t.description AS tech_desc
-            LIMIT 350
+            LIMIT 80
         """)
         for r in res2:
             a    = r["actor"]
             tid  = r["tech_id"]  or ""
             name = r["tech_name"] or tid
-            disp = name[:30]  # keep display label short
             if a and a not in nodes:
                 nodes[a] = {"id": a, "label": "ThreatActor", "description": ""}
             if tid:
@@ -538,12 +538,14 @@ def graph_data():
                 if a:
                     edges.append({"source": a, "target": tid, "label": "USES"})
 
-        # ── 3. IOC ──► Malware (INDICATES) ────────────────────────────────
+
+        # ── 3. IOC ──► Malware (INDICATES) — max 3 per malware family ─────
         res3 = session.run("""
             MATCH (i:IOC)-[:INDICATES]->(m:Malware)
+            WITH m, collect(i)[0..3] AS sampled
+            UNWIND sampled AS i
             RETURN i.value AS ioc, i.type AS ioc_type,
                    i.first_seen AS first_seen, m.name AS malware
-            LIMIT 80
         """)
         for r in res3:
             ioc = r["ioc"]
@@ -555,6 +557,7 @@ def graph_data():
                 nodes[m] = {"id": m, "label": "Malware", "description": ""}
             if ioc and m:
                 edges.append({"source": ioc, "target": m, "label": "INDICATES"})
+
 
         # ── 4. CVE nodes — synthetic edges via known associations ──────────
         CVE_EDGES = [
