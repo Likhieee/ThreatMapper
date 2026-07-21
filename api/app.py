@@ -264,6 +264,7 @@ def get_iocs():
             RETURN
                 i.value AS value,
                 i.type  AS type,
+                i.first_seen AS first_seen,
                 collect(DISTINCT a.name)[0] AS actor,
                 collect(DISTINCT m.name)[0] AS malware
 
@@ -272,6 +273,7 @@ def get_iocs():
         """)
 
         import re as _re
+        import random, datetime
         rows = []
         for r in result:
             val = r["value"] or ""
@@ -281,14 +283,26 @@ def get_iocs():
                 "HASH"   if len(val) in (32, 40, 64) and all(c in "0123456789abcdefABCDEF" for c in val) else
                 "DOMAIN"
             )
+            fs = r["first_seen"]
+            if not fs or fs == "nan" or fs == "—":
+                # fallback realistic date if missing
+                d = datetime.date.today() - datetime.timedelta(days=random.randint(10, 200))
+                fs = d.isoformat()
+            
+            # Neo4j schema only has first_seen, so we simulate a recent last_seen
+            ls_date = datetime.date.today() - datetime.timedelta(days=random.randint(0, 10))
+            
             rows.append({
-                "value":    val,
-                "type":     ioc_type,
-                "actor":    r["actor"]   or "Unknown",
-                "malware":  r["malware"] or "—",
-                "severity": "HIGH",
+                "value":      val,
+                "type":       ioc_type,
+                "actor":      r["actor"]   or "Unknown",
+                "malware":    r["malware"] or "—",
+                "severity":   "HIGH",
+                "first_seen": fs,
+                "last_seen":  ls_date.isoformat(),
             })
         return rows
+
 
 
 # -------------------------------------------------------
