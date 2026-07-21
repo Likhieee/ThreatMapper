@@ -258,15 +258,14 @@ def get_iocs():
 
         result = session.run("""
 
-            MATCH (i:IOC)
-            OPTIONAL MATCH (i)-[:INDICATES]->(m:Malware)<-[:USES]-(a:ThreatActor)
+            MATCH (i:IOC)-[:INDICATES]->(m:Malware)<-[:USES]-(a:ThreatActor)
 
-            RETURN
+            RETURN DISTINCT
                 i.value AS value,
                 i.type  AS type,
                 i.first_seen AS first_seen,
-                collect(DISTINCT a.name)[0] AS actor,
-                collect(DISTINCT m.name)[0] AS malware
+                a.name AS actor,
+                m.name AS malware
 
             LIMIT 100
 
