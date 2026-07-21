@@ -11,9 +11,9 @@ export function useAPI(endpoint, base = API, deps = []) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetch = useCallback(async () => {
+  const fetch = useCallback(async (force = false) => {
     const url = base + endpoint;
-    if (cache[url]) { setData(cache[url]); setLoading(false); return; }
+    if (!force && cache[url]) { setData(cache[url]); setLoading(false); return; }
     setLoading(true);
     try {
       const res = await axios.get(url, { timeout: 8000 });
@@ -28,9 +28,16 @@ export function useAPI(endpoint, base = API, deps = []) {
     }
   }, [endpoint, base]);
 
+  const refetch = useCallback(() => {
+    const url = base + endpoint;
+    delete cache[url];   // bust cache so we always get fresh data
+    fetch(true);
+  }, [fetch, base, endpoint]);
+
   useEffect(() => { fetch(); }, [fetch, ...deps]);
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch };
 }
+
 
 export async function apiFetch(endpoint, base = API) {
   try {
