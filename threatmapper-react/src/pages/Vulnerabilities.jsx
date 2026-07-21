@@ -86,7 +86,7 @@ const SEVERITY_COLORS = {
 };
 
 export default function Vulnerabilities() {
-  const { data: apiData, loading } = useAPI('/iocs');
+  const { data: apiData, loading, refetch } = useAPI('/iocs');
   const [filter, setFilter]        = useState('all');
 
   // /iocs returns either enriched objects {value,type,actor,...} or plain strings
@@ -146,10 +146,14 @@ export default function Vulnerabilities() {
             CISA KEV + NVD CVE Database · {iocs.length} indicators tracked
           </p>
         </div>
-        <div style={{display:'flex',gap:4}}>
-          {['all','critical','high','medium'].map(f => (
-            <Btn key={f} active={filter===f} onClick={()=>setFilter(f)}>{f.toUpperCase()}</Btn>
-          ))}
+        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+          <div style={{display:'flex',gap:4}}>
+            {['all','critical','high','medium'].map(f => (
+              <Btn key={f} active={filter===f} onClick={()=>setFilter(f)}>{f.toUpperCase()}</Btn>
+            ))}
+          </div>
+          <div style={{width:1,height:24,background:'rgba(255,255,255,0.1)'}}></div>
+          <Btn variant='cyan' onClick={refetch || (() => window.location.reload())}>⟳ REFRESH</Btn>
         </div>
       </div>
 
