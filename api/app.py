@@ -157,7 +157,6 @@ def darkweb_intel():
 
     return {
         "live":              is_live,
-        "total_iocs":        total_iocs,
         "forum_posts":       forum_posts,
         "credential_leaks":  credential_leaks,
         "stats": {
