@@ -16,7 +16,8 @@ export function useAPI(endpoint, base = API, deps = []) {
     if (!force && cache[url]) { setData(cache[url]); setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await axios.get(url, { timeout: 8000 });
+      const fetchUrl = force ? `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}` : url;
+      const res = await axios.get(fetchUrl, { timeout: 8000 });
       cache[url] = res.data;
       setData(res.data);
       setError(null);
