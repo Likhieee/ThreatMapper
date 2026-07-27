@@ -704,3 +704,52 @@ def relationship_summary():
 @app.get("/graph-summary")
 def graph_summary():
     return get_graph_summary()
+
+
+# -------------------------------------------------------
+# ML PREDICTIONS (SIMULATED DEMO MODE)
+# -------------------------------------------------------
+
+SIMULATION_STATE = 0
+
+@app.post("/retrain")
+def retrain_model():
+    global SIMULATION_STATE
+    # Toggle state to simulate time passing (Day 0 vs Day 30 post-incident)
+    SIMULATION_STATE = 1 if SIMULATION_STATE == 0 else 0
+    return {"status": "success", "message": "Model retrained"}
+
+@app.get("/predictions")
+def get_predictions():
+    if SIMULATION_STATE == 0:
+        # Initial State (Before Incident)
+        return {"predictions": [
+            {"sector": "Indian Banking", "risk": 78, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "30 days"},
+            {"sector": "EU Government", "risk": 71, "actor": "APT28", "confidence": "HIGH", "timeframe": "30 days"},
+            {"sector": "US Healthcare", "risk": 54, "actor": "APT41", "confidence": "MEDIUM", "timeframe": "45 days"},
+            {"sector": "APAC Energy", "risk": 48, "actor": "Sandworm", "confidence": "MEDIUM", "timeframe": "60 days"},
+            {"sector": "ME Telecom", "risk": 31, "actor": "OilRig", "confidence": "LOW", "timeframe": "90 days"},
+            {"sector": "Asia Pacific Tech", "risk": 24, "actor": "APT34", "confidence": "LOW", "timeframe": "90 days"},
+            {"sector": "US Financial", "risk": 82, "actor": "FIN7", "confidence": "HIGH", "timeframe": "21 days"},
+            {"sector": "UK Defence", "risk": 67, "actor": "APT29", "confidence": "HIGH", "timeframe": "30 days"},
+            {"sector": "German Mfg", "risk": 61, "actor": "Turla", "confidence": "MEDIUM", "timeframe": "45 days"},
+            {"sector": "LATAM Finance", "risk": 43, "actor": "Cobalt Group", "confidence": "MEDIUM", "timeframe": "60 days"},
+            {"sector": "Global Crypto", "risk": 88, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "14 days"},
+            {"sector": "EU Critical Infra", "risk": 74, "actor": "Volt Typhoon", "confidence": "HIGH", "timeframe": "30 days"},
+        ]}
+    else:
+        # Day 30 State (After Incident is fed into the ML model)
+        return {"predictions": [
+            {"sector": "Indian Banking", "risk": 62, "actor": "Lazarus Group", "confidence": "MEDIUM", "timeframe": "30 days"},
+            {"sector": "EU Government", "risk": 55, "actor": "APT28", "confidence": "MEDIUM", "timeframe": "30 days"},
+            {"sector": "US Healthcare", "risk": 91, "actor": "ALPHV/BlackCat", "confidence": "HIGH", "timeframe": "14 days"},
+            {"sector": "APAC Energy", "risk": 75, "actor": "Sandworm", "confidence": "HIGH", "timeframe": "21 days"},
+            {"sector": "ME Telecom", "risk": 28, "actor": "OilRig", "confidence": "LOW", "timeframe": "90 days"},
+            {"sector": "Asia Pacific Tech", "risk": 29, "actor": "APT34", "confidence": "LOW", "timeframe": "90 days"},
+            {"sector": "US Financial", "risk": 88, "actor": "FIN7", "confidence": "HIGH", "timeframe": "14 days"},
+            {"sector": "UK Defence", "risk": 65, "actor": "APT29", "confidence": "HIGH", "timeframe": "30 days"},
+            {"sector": "German Mfg", "risk": 60, "actor": "Turla", "confidence": "MEDIUM", "timeframe": "45 days"},
+            {"sector": "LATAM Finance", "risk": 45, "actor": "Cobalt Group", "confidence": "MEDIUM", "timeframe": "60 days"},
+            {"sector": "Global Crypto", "risk": 92, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "7 days"},
+            {"sector": "EU Critical Infra", "risk": 81, "actor": "Volt Typhoon", "confidence": "HIGH", "timeframe": "21 days"},
+        ]}
