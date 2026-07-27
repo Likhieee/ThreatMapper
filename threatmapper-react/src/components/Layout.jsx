@@ -26,7 +26,7 @@ export default function Layout({ children, stats }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [clock, setClock] = useState('');
-  const { data: awsData } = useAPI('/', BACKEND);
+  const { data: awsData } = useAPI('/');
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-GB', { hour12: false }) + ' UTC');
