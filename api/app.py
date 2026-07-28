@@ -742,14 +742,14 @@ def get_predictions():
         return {"predictions": [
             {"sector": "Indian Banking", "risk": 62, "actor": "Lazarus Group", "confidence": "MEDIUM", "timeframe": "30 days"},
             {"sector": "EU Government", "risk": 55, "actor": "APT28", "confidence": "MEDIUM", "timeframe": "30 days"},
-            {"sector": "US Healthcare", "risk": 91, "actor": "ALPHV/BlackCat", "confidence": "HIGH", "timeframe": "14 days"},
+            {"sector": "US Healthcare", "risk": 52, "actor": "ALPHV/BlackCat", "confidence": "MEDIUM", "timeframe": "45 days"},
             {"sector": "APAC Energy", "risk": 75, "actor": "Sandworm", "confidence": "HIGH", "timeframe": "21 days"},
             {"sector": "ME Telecom", "risk": 28, "actor": "OilRig", "confidence": "LOW", "timeframe": "90 days"},
             {"sector": "Asia Pacific Tech", "risk": 29, "actor": "APT34", "confidence": "LOW", "timeframe": "90 days"},
-            {"sector": "US Financial", "risk": 88, "actor": "FIN7", "confidence": "HIGH", "timeframe": "14 days"},
+            {"sector": "US Financial", "risk": 63, "actor": "FIN7", "confidence": "MEDIUM", "timeframe": "30 days"},
             {"sector": "UK Defence", "risk": 65, "actor": "APT29", "confidence": "HIGH", "timeframe": "30 days"},
             {"sector": "German Mfg", "risk": 60, "actor": "Turla", "confidence": "MEDIUM", "timeframe": "45 days"},
             {"sector": "LATAM Finance", "risk": 45, "actor": "Cobalt Group", "confidence": "MEDIUM", "timeframe": "60 days"},
             {"sector": "Global Crypto", "risk": 92, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "7 days"},
-            {"sector": "EU Critical Infra", "risk": 81, "actor": "Volt Typhoon", "confidence": "HIGH", "timeframe": "21 days"},
+            {"sector": "EU Critical Infra", "risk": 59, "actor": "Volt Typhoon", "confidence": "MEDIUM", "timeframe": "45 days"},
         ]}
