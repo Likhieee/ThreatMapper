@@ -942,34 +942,42 @@ def retrain_model():
 @app.get("/predictions")
 def get_predictions():
     if SIMULATION_STATE == 0:
-        # Initial State (Before Incident)
+        # Initial Forecast State
         return {"predictions": [
-            {"sector": "Indian Banking", "risk": 78, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "30 days"},
-            {"sector": "EU Government", "risk": 71, "actor": "APT28", "confidence": "HIGH", "timeframe": "30 days"},
-            {"sector": "US Healthcare", "risk": 54, "actor": "APT41", "confidence": "MEDIUM", "timeframe": "45 days"},
-            {"sector": "APAC Energy", "risk": 48, "actor": "Sandworm", "confidence": "MEDIUM", "timeframe": "60 days"},
-            {"sector": "ME Telecom", "risk": 31, "actor": "OilRig", "confidence": "LOW", "timeframe": "90 days"},
-            {"sector": "Asia Pacific Tech", "risk": 24, "actor": "APT34", "confidence": "LOW", "timeframe": "90 days"},
-            {"sector": "US Financial", "risk": 82, "actor": "FIN7", "confidence": "HIGH", "timeframe": "21 days"},
-            {"sector": "UK Defence", "risk": 67, "actor": "APT29", "confidence": "HIGH", "timeframe": "30 days"},
-            {"sector": "German Mfg", "risk": 61, "actor": "Turla", "confidence": "MEDIUM", "timeframe": "45 days"},
-            {"sector": "LATAM Finance", "risk": 43, "actor": "Cobalt Group", "confidence": "MEDIUM", "timeframe": "60 days"},
-            {"sector": "Global Crypto", "risk": 88, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "14 days"},
-            {"sector": "EU Critical Infra", "risk": 74, "actor": "Volt Typhoon", "confidence": "HIGH", "timeframe": "30 days"},
+            {"sector": "Financial & Banking", "category": "Finance", "risk": 84, "actor": "FIN7 / Carbanak", "malware": "Carbanak / Cobalt Strike", "cve": "CVE-2024-21413", "confidence": "HIGH", "timeframe": "14 days", "active_actors_count": 45, "attack_vector": "POS Malware & Swift Wire Theft"},
+            {"sector": "Government & Defense", "category": "Defense", "risk": 79, "actor": "APT28 (Fancy Bear)", "malware": "X-Agent / Mimikatz", "cve": "CVE-2024-21413", "confidence": "HIGH", "timeframe": "21 days", "active_actors_count": 99, "attack_vector": "Spearphishing & Diplomatic Espionage"},
+            {"sector": "Energy & Power Grid", "category": "Critical Infra", "risk": 76, "actor": "Sandworm Team", "malware": "Industroyer2 / BlackEnergy", "cve": "CVE-2022-30190", "confidence": "HIGH", "timeframe": "30 days", "active_actors_count": 15, "attack_vector": "ICS/SCADA Substation Disruption"},
+            {"sector": "Cryptocurrency & Web3", "category": "Finance", "risk": 91, "actor": "Lazarus Group", "malware": "BLINDINGCAN / AppleJeus", "cve": "CVE-2021-44228", "confidence": "CRITICAL", "timeframe": "7 days", "active_actors_count": 8, "attack_vector": "Smart Contract Heists & Phishing"},
+            {"sector": "Healthcare & Pharma", "category": "Healthcare", "risk": 68, "actor": "ALPHV / BlackCat", "malware": "Exmatter / LockBit 3.0", "cve": "CVE-2023-4966", "confidence": "HIGH", "timeframe": "30 days", "active_actors_count": 15, "attack_vector": "Double-Extortion Ransomware"},
+            {"sector": "High-Tech & Semiconductor", "category": "Tech", "risk": 73, "actor": "APT41 (Double Dragon)", "malware": "ShadowPad / PlugX", "cve": "CVE-2024-3821", "confidence": "HIGH", "timeframe": "21 days", "active_actors_count": 36, "attack_vector": "IP Theft & Supply Chain Insertion"},
+            {"sector": "Telecommunications & 5G", "category": "Tech", "risk": 64, "actor": "Volt Typhoon", "malware": "SOGU / Living-off-the-Land", "cve": "CVE-2024-3400", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 19, "attack_vector": "Router Firmware & Lawful Intercept"},
+            {"sector": "Aerospace & Aviation", "category": "Defense", "risk": 62, "actor": "APT33 (Elfin)", "malware": "DROPSHOT / SHAPESHIFT", "cve": "CVE-2020-0796", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 11, "attack_vector": "Drone & Avionics Blueprint Espionage"},
+            {"sector": "Supply Chain & Logistics", "category": "Critical Infra", "risk": 66, "actor": "UNC2452 (Nobelium)", "malware": "SUNBURST / TEARDROP", "cve": "CVE-2021-40444", "confidence": "MEDIUM", "timeframe": "30 days", "active_actors_count": 13, "attack_vector": "Upstream Software Package Poisoning"},
+            {"sector": "Retail & E-Commerce", "category": "Enterprise", "risk": 58, "actor": "FIN6 / Magecart", "malware": "FrameworkPOS / Skimmers", "cve": "CVE-2017-0199", "confidence": "MEDIUM", "timeframe": "60 days", "active_actors_count": 8, "attack_vector": "Digital Skimming & Customer Data Theft"},
+            {"sector": "Education & Research", "category": "Enterprise", "risk": 49, "actor": "Kimsuky / Thallium", "malware": "BabyShark / GoldDragon", "cve": "CVE-2020-1472", "confidence": "MEDIUM", "timeframe": "60 days", "active_actors_count": 18, "attack_vector": "Academic Research & Nuclear Tech Theft"},
+            {"sector": "Cloud & Managed Providers", "category": "Tech", "risk": 72, "actor": "Scattered Spider", "malware": "MIMIKATZ / Okta-Bypass", "cve": "CVE-2023-34362", "confidence": "HIGH", "timeframe": "21 days", "active_actors_count": 5, "attack_vector": "Help Desk Social Engineering & MFA Bypasses"},
+            {"sector": "Water & Wastewater", "category": "Critical Infra", "risk": 55, "actor": "CyberAv3ngers (IRGC)", "malware": "PLC Controller Wiper", "cve": "CVE-2023-6448", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 7, "attack_vector": "Unitronics PLC Tampering"},
+            {"sector": "Media & Journalism", "category": "Enterprise", "risk": 44, "actor": "Charming Kitten", "malware": "POWERSTAR / Bella", "cve": "CVE-2021-26855", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 13, "attack_vector": "Source Surveillance & Social Account Takeover"},
+            {"sector": "Automotive & Transport", "category": "Critical Infra", "risk": 46, "actor": "Ember Bear (Bleeding Bear)", "malware": "HermeticWiper / CaddyWiper", "cve": "CVE-2022-26134", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 4, "attack_vector": "Rail Logistics Jamming"},
+            {"sector": "Legal & Corporate Law", "category": "Enterprise", "risk": 41, "actor": "WIRTE Group", "malware": "MS Excel Payload Dropper", "cve": "CVE-2017-11882", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 10, "attack_vector": "M&A Deal Document Interception"}
         ]}
     else:
-        # Day 30 State (After Incident is fed into the ML model)
+        # Day 30 Incident-Updated State
         return {"predictions": [
-            {"sector": "Indian Banking", "risk": 62, "actor": "Lazarus Group", "confidence": "MEDIUM", "timeframe": "30 days"},
-            {"sector": "EU Government", "risk": 55, "actor": "APT28", "confidence": "MEDIUM", "timeframe": "30 days"},
-            {"sector": "US Healthcare", "risk": 52, "actor": "ALPHV/BlackCat", "confidence": "MEDIUM", "timeframe": "45 days"},
-            {"sector": "APAC Energy", "risk": 75, "actor": "Sandworm", "confidence": "HIGH", "timeframe": "21 days"},
-            {"sector": "ME Telecom", "risk": 28, "actor": "OilRig", "confidence": "LOW", "timeframe": "90 days"},
-            {"sector": "Asia Pacific Tech", "risk": 29, "actor": "APT34", "confidence": "LOW", "timeframe": "90 days"},
-            {"sector": "US Financial", "risk": 63, "actor": "FIN7", "confidence": "MEDIUM", "timeframe": "30 days"},
-            {"sector": "UK Defence", "risk": 65, "actor": "APT29", "confidence": "HIGH", "timeframe": "30 days"},
-            {"sector": "German Mfg", "risk": 60, "actor": "Turla", "confidence": "MEDIUM", "timeframe": "45 days"},
-            {"sector": "LATAM Finance", "risk": 45, "actor": "Cobalt Group", "confidence": "MEDIUM", "timeframe": "60 days"},
-            {"sector": "Global Crypto", "risk": 92, "actor": "Lazarus Group", "confidence": "HIGH", "timeframe": "7 days"},
-            {"sector": "EU Critical Infra", "risk": 59, "actor": "Volt Typhoon", "confidence": "MEDIUM", "timeframe": "45 days"},
+            {"sector": "Financial & Banking", "category": "Finance", "risk": 68, "actor": "FIN7 / Carbanak", "malware": "Carbanak / Cobalt Strike", "cve": "CVE-2024-21413", "confidence": "MEDIUM", "timeframe": "30 days", "active_actors_count": 45, "attack_vector": "POS Malware & Swift Wire Theft"},
+            {"sector": "Government & Defense", "category": "Defense", "risk": 63, "actor": "APT28 (Fancy Bear)", "malware": "X-Agent / Mimikatz", "cve": "CVE-2024-21413", "confidence": "MEDIUM", "timeframe": "30 days", "active_actors_count": 99, "attack_vector": "Spearphishing & Diplomatic Espionage"},
+            {"sector": "Energy & Power Grid", "category": "Critical Infra", "risk": 82, "actor": "Sandworm Team", "malware": "Industroyer2 / BlackEnergy", "cve": "CVE-2022-30190", "confidence": "HIGH", "timeframe": "14 days", "active_actors_count": 15, "attack_vector": "ICS/SCADA Substation Disruption"},
+            {"sector": "Cryptocurrency & Web3", "category": "Finance", "risk": 94, "actor": "Lazarus Group", "malware": "BLINDINGCAN / AppleJeus", "cve": "CVE-2021-44228", "confidence": "CRITICAL", "timeframe": "7 days", "active_actors_count": 8, "attack_vector": "Smart Contract Heists & Phishing"},
+            {"sector": "Healthcare & Pharma", "category": "Healthcare", "risk": 62, "actor": "ALPHV / BlackCat", "malware": "Exmatter / LockBit 3.0", "cve": "CVE-2023-4966", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 15, "attack_vector": "Double-Extortion Ransomware"},
+            {"sector": "High-Tech & Semiconductor", "category": "Tech", "risk": 77, "actor": "APT41 (Double Dragon)", "malware": "ShadowPad / PlugX", "cve": "CVE-2024-3821", "confidence": "HIGH", "timeframe": "14 days", "active_actors_count": 36, "attack_vector": "IP Theft & Supply Chain Insertion"},
+            {"sector": "Telecommunications & 5G", "category": "Tech", "risk": 58, "actor": "Volt Typhoon", "malware": "SOGU / Living-off-the-Land", "cve": "CVE-2024-3400", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 19, "attack_vector": "Router Firmware & Lawful Intercept"},
+            {"sector": "Aerospace & Aviation", "category": "Defense", "risk": 59, "actor": "APT33 (Elfin)", "malware": "DROPSHOT / SHAPESHIFT", "cve": "CVE-2020-0796", "confidence": "MEDIUM", "timeframe": "45 days", "active_actors_count": 11, "attack_vector": "Drone & Avionics Blueprint Espionage"},
+            {"sector": "Supply Chain & Logistics", "category": "Critical Infra", "risk": 71, "actor": "UNC2452 (Nobelium)", "malware": "SUNBURST / TEARDROP", "cve": "CVE-2021-40444", "confidence": "HIGH", "timeframe": "21 days", "active_actors_count": 13, "attack_vector": "Upstream Software Package Poisoning"},
+            {"sector": "Retail & E-Commerce", "category": "Enterprise", "risk": 52, "actor": "FIN6 / Magecart", "malware": "FrameworkPOS / Skimmers", "cve": "CVE-2017-0199", "confidence": "MEDIUM", "timeframe": "60 days", "active_actors_count": 8, "attack_vector": "Digital Skimming & Customer Data Theft"},
+            {"sector": "Education & Research", "category": "Enterprise", "risk": 48, "actor": "Kimsuky / Thallium", "malware": "BabyShark / GoldDragon", "cve": "CVE-2020-1472", "confidence": "LOW", "timeframe": "60 days", "active_actors_count": 18, "attack_vector": "Academic Research & Nuclear Tech Theft"},
+            {"sector": "Cloud & Managed Providers", "category": "Tech", "risk": 78, "actor": "Scattered Spider", "malware": "MIMIKATZ / Okta-Bypass", "cve": "CVE-2023-34362", "confidence": "HIGH", "timeframe": "14 days", "active_actors_count": 5, "attack_vector": "Help Desk Social Engineering & MFA Bypasses"},
+            {"sector": "Water & Wastewater", "category": "Critical Infra", "risk": 60, "actor": "CyberAv3ngers (IRGC)", "malware": "PLC Controller Wiper", "cve": "CVE-2023-6448", "confidence": "MEDIUM", "timeframe": "30 days", "active_actors_count": 7, "attack_vector": "Unitronics PLC Tampering"},
+            {"sector": "Media & Journalism", "category": "Enterprise", "risk": 40, "actor": "Charming Kitten", "malware": "POWERSTAR / Bella", "cve": "CVE-2021-26855", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 13, "attack_vector": "Source Surveillance & Social Account Takeover"},
+            {"sector": "Automotive & Transport", "category": "Critical Infra", "risk": 42, "actor": "Ember Bear (Bleeding Bear)", "malware": "HermeticWiper / CaddyWiper", "cve": "CVE-2022-26134", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 4, "attack_vector": "Rail Logistics Jamming"},
+            {"sector": "Legal & Corporate Law", "category": "Enterprise", "risk": 38, "actor": "WIRTE Group", "malware": "MS Excel Payload Dropper", "cve": "CVE-2017-11882", "confidence": "LOW", "timeframe": "90 days", "active_actors_count": 10, "attack_vector": "M&A Deal Document Interception"}
         ]}
