@@ -478,26 +478,25 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <!-- ═══════ PAGE 3: KNOWLEDGE GRAPH ═══════ -->
     <div class="page" id="page-graph">
       <div class="page-header">
-        <div><div class="page-title glitch">◈ KNOWLEDGE GRAPH</div><div class="page-sub">NEO4J-POWERED ENTITY RELATIONSHIP VISUALIZATION — 4,847 NODES — 12,394 EDGES</div></div>
+        <div><div class="page-title glitch">◈ KNOWLEDGE GRAPH</div><div class="page-sub" id="kg-subtitle">NEO4J-POWERED ENTITY RELATIONSHIP VISUALIZATION — LIVE THREAT INTELLIGENCE</div></div>
       </div>
       <div class="flex mb" style="align-items:center;flex-wrap:wrap;gap:7px">
-        <button class="btn btn-c btn-sm" onclick="gfilt('all')">ALL</button>
-        <button class="btn btn-c btn-sm" onclick="gfilt('actor')">◉ ACTORS</button>
-        <button class="btn btn-sm" style="background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.3);color:var(--red)" onclick="gfilt('malware')">◉ MALWARE</button>
-        <button class="btn btn-sm" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.3);color:var(--orange)" onclick="gfilt('tool')">◉ TOOLS</button>
-        <button class="btn btn-sm" style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.25);color:var(--green)" onclick="gfilt('target')">◉ TARGETS</button>
-        <button class="btn btn-sm" style="background:rgba(191,90,242,.1);border:1px solid rgba(191,90,242,.28);color:var(--purple)" onclick="gfilt('cve')">◉ CVEs</button>
-        <div style="margin-left:auto;display:flex;gap:14px;font-family:var(--mono);font-size:9px;letter-spacing:1px">
-          <span style="color:var(--cyan)">● ACTOR</span>
-          <span style="color:var(--red)">● MALWARE</span>
-          <span style="color:var(--orange)">● TOOL</span>
-          <span style="color:var(--green)">● TARGET</span>
-          <span style="color:var(--purple)">● CVE</span>
+        <button class="btn btn-c btn-sm" onclick="gfilt('all', this)">ALL</button>
+        <button class="btn btn-sm" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);color:var(--cyan)" onclick="gfilt('actor', this)">◉ ACTORS</button>
+        <button class="btn btn-sm" style="background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.3);color:var(--red)" onclick="gfilt('malware', this)">◉ MALWARE</button>
+        <button class="btn btn-sm" style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.3);color:var(--orange)" onclick="gfilt('tool', this)">◉ TOOLS</button>
+        <button class="btn btn-sm" style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.25);color:var(--green)" onclick="gfilt('ioc', this)">◉ IOCs</button>
+        <button class="btn btn-sm" style="background:rgba(191,90,242,.1);border:1px solid rgba(191,90,242,.28);color:var(--purple)" onclick="gfilt('cve', this)">◉ CVEs</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm" onclick="zoomKG(1.2)" title="Zoom in">+ ZOOM</button>
+          <button class="btn btn-sm" onclick="zoomKG(0.8)" title="Zoom out">- ZOOM</button>
+          <button class="btn btn-sm" onclick="resetKG()" title="Reset view">⟲ RESET</button>
+          <span id="kg-stat-badge" style="color:var(--cyan);font-family:var(--mono);font-size:10px;padding:4px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:2px">0 NODES</span>
         </div>
       </div>
       <div class="panel">
         <div class="lbar"></div>
-        <canvas id="graph-canvas" height="500"></canvas>
+        <canvas id="graph-canvas" height="620"></canvas>
       </div>
     </div>
 
@@ -1389,14 +1388,24 @@ setTimeout(() => {
    KNOWLEDGE GRAPH — Real Neo4j Data
 ═══════════════════════════════════════ */
 let kgNodes=[], kgEdges=[], kgAnim;
+let rawKGData = null;
+let kgZoom = 1.0, kgPanX = 0, kgPanY = 0;
+
+window.zoomKG = function(factor){
+  kgZoom = Math.max(0.2, Math.min(4.0, kgZoom * factor));
+};
+
+window.resetKG = function(){
+  kgZoom = 1.0; kgPanX = 0; kgPanY = 0;
+};
 
 function initGraph(){
   const canvas = document.getElementById('graph-canvas');
   if(canvas){
-    canvas.width = canvas.parentElement.offsetWidth || 900;
-    canvas.height = 500;
+    canvas.width = canvas.parentElement.offsetWidth || 1100;
+    canvas.height = 620;
   }
-  loadKGData();
+  loadKGData('all');
   setTimeout(loadHiddenLinks, 2000);
 }
 
@@ -1408,10 +1417,13 @@ function gfilt(type, el){
 
 async function loadKGData(filter){
   try{
-    const data = await fetch(API+'/graph-data').then(r=>r.json());
-    if(!data||!data.nodes||data.nodes.length===0){
-      console.warn('No graph data returned');
-      return;
+    if(!rawKGData){
+      const data = await fetch(API+'/graph-data').then(r=>r.json());
+      if(!data||!data.nodes||data.nodes.length===0){
+        console.warn('No graph data returned');
+        return;
+      }
+      rawKGData = data;
     }
 
     const colorMap = {
@@ -1424,43 +1436,78 @@ async function loadKGData(filter){
 
     const canvas = document.getElementById('graph-canvas');
     if(!canvas) return;
-    const W = canvas.width || 900;
-    const H = canvas.height || 500;
+    const W = canvas.width || 1100;
+    const H = canvas.height || 620;
 
-    let nodes = data.nodes;
+    let nodes = rawKGData.nodes || [];
+    let edges = rawKGData.edges || [];
+
     if(filter && filter !== 'all'){
       const typeMap = {
-        'actor':'ThreatActor','malware':'Malware',
-        'tool':'Technique','cve':'CVE'
+        'actor':'ThreatActor',
+        'malware':'Malware',
+        'tool':'Technique',
+        'cve':'CVE',
+        'ioc':'IOC'
       };
-      if(typeMap[filter]) nodes = nodes.filter(n=>n.label===typeMap[filter]);
+      const targetLabel = typeMap[filter];
+      if(targetLabel){
+        const matchingIds = new Set(nodes.filter(n=>n.label===targetLabel).map(n=>n.id));
+        const connectedIds = new Set(matchingIds);
+        edges.forEach(e=>{
+          if(matchingIds.has(e.source)) connectedIds.add(e.target);
+          if(matchingIds.has(e.target)) connectedIds.add(e.source);
+        });
+        nodes = nodes.filter(n=>connectedIds.has(n.id));
+      }
     }
 
-    kgNodes = nodes.slice(0,80).map((n,i)=>({
-      id:i,
-      label: n.id.length>11 ? n.id.substring(0,11) : n.id,
-      full: n.id,
-      type: n.label,
-      color: colorMap[n.label]||'#00d4ff',
-      x: 60+Math.random()*(W-120),
-      y: 60+Math.random()*(H-120),
-      vx:0, vy:0,
-      r: n.label==='ThreatActor'?14:10
-    }));
+    // Display up to 260 nodes
+    const nodeSlice = nodes.slice(0, 260);
+    const nodeMap = {};
 
-    const nodeMap={};
-    kgNodes.forEach(n=>{ nodeMap[n.full]=n.id; });
+    kgNodes = nodeSlice.map((n, i)=>{
+      nodeMap[n.id] = i;
+      // Spiral positioning from center
+      const angle = i * 0.38;
+      const radius = 40 + Math.sqrt(i) * 26;
+      return {
+        id: i,
+        label: n.id.length > 13 ? n.id.substring(0, 13) + '…' : n.id,
+        full: n.id,
+        type: n.label,
+        desc: n.description || '',
+        color: colorMap[n.label] || '#00d4ff',
+        x: (W / 2) + Math.cos(angle) * radius,
+        y: (H / 2) + Math.sin(angle) * radius,
+        vx: 0, vy: 0,
+        r: n.label==='ThreatActor' ? 12 : (n.label==='Malware' ? 10 : 8)
+      };
+    });
 
-    kgEdges = data.edges.slice(0,200).map(e=>{
-      const s=nodeMap[e.source], t=nodeMap[e.target];
-      return (s!==undefined && t!==undefined) ? [s,t] : null;
-    }).filter(Boolean);
+    // Match edges between active nodes
+    kgEdges = [];
+    for(const e of edges){
+      const s = nodeMap[e.source];
+      const t = nodeMap[e.target];
+      if(s !== undefined && t !== undefined){
+        kgEdges.push([s, t]);
+        if(kgEdges.length >= 650) break;
+      }
+    }
+
+    // Update badge
+    const badge = document.getElementById('kg-stat-badge');
+    if(badge) badge.textContent = `${kgNodes.length} NODES — ${kgEdges.length} EDGES`;
+
+    const sub = document.getElementById('kg-subtitle');
+    if(sub) sub.textContent = `NEO4J GRAPH — DISPLAYING ${kgNodes.length} CONNECTED ENTITIES ACROSS MITRE ATT&CK`;
 
     cancelAnimationFrame(kgAnim);
     drawKG();
-    console.log('KG rendered:',kgNodes.length,'nodes',kgEdges.length,'edges');
+    console.log('KG rendered:', kgNodes.length, 'nodes', kgEdges.length, 'edges');
   }catch(e){
-    console.error('Graph load error:',e);
+    console.error('Graph load error:', e);
   }
 }
 
@@ -1468,11 +1515,9 @@ function drawKG(){
   const canvas = document.getElementById('graph-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width || 900, H = canvas.height || 500;
+  const W = canvas.width || 1100, H = canvas.height || 620;
   let t = 0;
 
-  // Zoom & Pan state
-  let zoom = 1.0, panX = 0, panY = 0;
   let isPanning = false, startX = 0, startY = 0;
   let dragNode = null, hoverNode = null;
 
@@ -1481,34 +1526,31 @@ function drawKG(){
   if(!tt){
     tt = document.createElement('div');
     tt.id = 'kg-tooltip';
-    tt.style.cssText = 'position:fixed;background:rgba(4,18,28,0.95);border:1px solid var(--cyan);' +
-      'padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--text);pointer-events:none;' +
-      'z-index:99999;border-radius:3px;box-shadow:0 0 16px rgba(0,212,255,0.3);display:none;max-width:260px';
+    tt.style.cssText = 'position:fixed;background:rgba(4,18,28,0.96);border:1px solid var(--cyan);' +
+      'padding:9px 13px;font-family:var(--mono);font-size:10px;color:var(--text);pointer-events:none;' +
+      'z-index:99999;border-radius:3px;box-shadow:0 0 16px rgba(0,212,255,0.35);display:none;max-width:280px;line-height:1.4';
     document.body.appendChild(tt);
   }
 
-  // Mouse coordinate helper
   function getMousePos(e){
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left - panX) / zoom,
-      y: (e.clientY - rect.top - panY) / zoom,
+      x: (e.clientX - rect.left - kgPanX) / kgZoom,
+      y: (e.clientY - rect.top - kgPanY) / kgZoom,
       rawX: e.clientX,
       rawY: e.clientY
     };
   }
 
-  // Node lookup under cursor
   function findNode(pos){
     for(let i = kgNodes.length - 1; i >= 0; i--){
       const n = kgNodes[i];
       const d = Math.hypot(n.x - pos.x, n.y - pos.y);
-      if(d <= (n.r + 6)) return n;
+      if(d <= (n.r + 8)) return n;
     }
     return null;
   }
 
-  // Remove existing listeners if any
   canvas.onmousemove = function(e){
     const pos = getMousePos(e);
     if(dragNode){
@@ -1520,8 +1562,8 @@ function drawKG(){
       return;
     }
     if(isPanning){
-      panX = e.clientX - startX;
-      panY = e.clientY - startY;
+      kgPanX = e.clientX - startX;
+      kgPanY = e.clientY - startY;
       tt.style.display = 'none';
       return;
     }
@@ -1532,9 +1574,10 @@ function drawKG(){
       tt.style.left = (e.clientX + 14) + 'px';
       tt.style.top = (e.clientY - 12) + 'px';
       tt.innerHTML = `
-        <div style="color:${hoverNode.color};font-weight:700;font-size:11px;margin-bottom:3px">${hoverNode.full || hoverNode.label}</div>
-        <div style="color:var(--text3);font-size:9px">TYPE: ${hoverNode.type || 'Entity'}</div>
-        <div style="color:var(--cyan2);font-size:9px;margin-top:4px">Click to inspect node details</div>
+        <div style="color:${hoverNode.color};font-weight:700;font-size:11px;margin-bottom:3px">${hoverNode.full}</div>
+        <div style="color:var(--text3);font-size:9px">TYPE: <span style="color:${hoverNode.color}">${hoverNode.type}</span></div>
+        ${hoverNode.desc ? `<div style="color:var(--text2);font-size:9px;margin-top:3px">${hoverNode.desc}</div>` : ''}
+        <div style="color:var(--cyan2);font-size:8px;margin-top:5px;letter-spacing:1px">CLICK TO INSPECT PROFILE</div>
       `;
     } else {
       canvas.style.cursor = 'crosshair';
@@ -1551,8 +1594,8 @@ function drawKG(){
       canvas.style.cursor = 'grabbing';
     } else {
       isPanning = true;
-      startX = e.clientX - panX;
-      startY = e.clientY - panY;
+      startX = e.clientX - kgPanX;
+      startY = e.clientY - kgPanY;
       canvas.style.cursor = 'move';
     }
   };
@@ -1573,8 +1616,8 @@ function drawKG(){
 
   canvas.onwheel = function(e){
     e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 0.88;
-    zoom = Math.max(0.3, Math.min(3.5, zoom * factor));
+    const factor = e.deltaY < 0 ? 1.14 : 0.86;
+    kgZoom = Math.max(0.2, Math.min(4.0, kgZoom * factor));
   };
 
   function frame(){
@@ -1582,85 +1625,90 @@ function drawKG(){
     t++;
 
     ctx.save();
-    ctx.translate(panX, panY);
-    ctx.scale(zoom, zoom);
+    ctx.translate(kgPanX, kgPanY);
+    ctx.scale(kgZoom, kgZoom);
 
-    // Force directed physics
-    for(let i=0;i<kgNodes.length;i++){
-      for(let j=i+1;j<kgNodes.length;j++){
-        const a=kgNodes[i], b=kgNodes[j];
-        const dx=a.x-b.x, dy=a.y-b.y;
-        const d=Math.sqrt(dx*dx+dy*dy)||1;
-        if(d<150){
-          const f=500/(d*d);
-          if(a !== dragNode){ a.vx+=f*dx/d; a.vy+=f*dy/d; }
-          if(b !== dragNode){ b.vx-=f*dx/d; b.vy-=f*dy/d; }
+    // Optimized force physics
+    const N = kgNodes.length;
+    for(let i=0; i<N; i++){
+      const a = kgNodes[i];
+      for(let j=i+1; j<Math.min(N, i+16); j++){
+        const b = kgNodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.sqrt(dx*dx + dy*dy) || 1;
+        if(d < 110){
+          const f = 240 / (d * d);
+          if(a !== dragNode){ a.vx += f * dx / d; a.vy += f * dy / d; }
+          if(b !== dragNode){ b.vx -= f * dx / d; b.vy -= f * dy / d; }
         }
       }
     }
 
     kgEdges.forEach(([i,j])=>{
-      const a=kgNodes[i], b=kgNodes[j];
-      if(!a||!b) return;
-      const dx=b.x-a.x, dy=b.y-a.y;
-      const d=Math.sqrt(dx*dx+dy*dy)||1;
-      const f=(d-110)*0.003;
-      if(a !== dragNode){ a.vx+=f*dx/d; a.vy+=f*dy/d; }
-      if(b !== dragNode){ b.vx-=f*dx/d; b.vy-=f*dy/d; }
+      const a = kgNodes[i], b = kgNodes[j];
+      if(!a || !b) return;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const f = (d - 85) * 0.0025;
+      if(a !== dragNode){ a.vx += f * dx / d; a.vy += f * dy / d; }
+      if(b !== dragNode){ b.vx -= f * dx / d; b.vy -= f * dy / d; }
     });
 
     kgNodes.forEach(n=>{
       if(n === dragNode) return;
-      n.vx*=0.84; n.vy*=0.84;
-      n.x=Math.max(n.r+10, Math.min(W-n.r-10, n.x+n.vx));
-      n.y=Math.max(n.r+10, Math.min(H-n.r-10, n.y+n.vy));
+      n.vx *= 0.82; n.vy *= 0.82;
+      n.x += n.vx;
+      n.y += n.vy;
     });
 
-    // Draw edges with flow dots
+    // Draw edges
     kgEdges.forEach(([i,j])=>{
-      const a=kgNodes[i], b=kgNodes[j];
-      if(!a||!b) return;
+      const a = kgNodes[i], b = kgNodes[j];
+      if(!a || !b) return;
       ctx.beginPath();
-      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-      ctx.strokeStyle='rgba(0,212,255,0.12)';
-      ctx.lineWidth=1.0; ctx.stroke();
-      const fr=((t*0.3+i*10)%100)/100;
-      const px=a.x+(b.x-a.x)*fr, py=a.y+(b.y-a.y)*fr;
-      ctx.beginPath(); ctx.arc(px,py,1.8,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,212,255,0.85)'; ctx.fill();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = 'rgba(0,212,255,0.14)';
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
     });
 
     // Draw nodes
     kgNodes.forEach(n=>{
       const isHov = (n === hoverNode || n === dragNode);
-      const pulse = 1 + 0.05*Math.sin(t*0.05+n.id);
 
-      // Glow ring
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, (n.r * pulse + (isHov ? 10 : 5)), 0, Math.PI*2);
-      ctx.fillStyle = isHov ? n.color+'35' : n.color+'15';
-      ctx.fill();
+      // Outer glow ring on hover
+      if(isHov){
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 9, 0, Math.PI*2);
+        ctx.fillStyle = n.color + '30';
+        ctx.fill();
+      }
 
       // Main circle
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
-      ctx.fillStyle = isHov ? n.color+'45' : n.color+'25';
+      ctx.fillStyle = isHov ? n.color + '55' : n.color + '30';
       ctx.fill();
       ctx.strokeStyle = isHov ? '#ffffff' : n.color;
-      ctx.lineWidth = isHov ? 2.5 : 1.5;
+      ctx.lineWidth = isHov ? 2.2 : 1.2;
       ctx.stroke();
 
-      // Node label
-      ctx.fillStyle = isHov ? '#ffffff' : n.color;
-      ctx.font = isHov ? 'bold 8px monospace' : '7px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(n.label, n.x, n.y);
+      // Node label (only if zoomed in or on hover or important)
+      if(kgZoom >= 0.7 || isHov || n.type === 'ThreatActor'){
+        ctx.fillStyle = isHov ? '#ffffff' : n.color;
+        ctx.font = isHov ? 'bold 9px monospace' : '7.5px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(n.label, n.x, n.y + n.r + 3);
+      }
     });
 
     ctx.restore();
 
-    kgAnim=requestAnimationFrame(frame);
+    kgAnim = requestAnimationFrame(frame);
   }
+
   if(kgAnim) cancelAnimationFrame(kgAnim);
   frame();
 }

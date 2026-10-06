@@ -543,128 +543,142 @@ def graph_data():
                 a, m = r["actor"], r["malware"]
                 if a:
                     nodes[a] = {"id": a, "label": "ThreatActor",
-                                "description": (r["actor_desc"] or "")[:120]}
+                                "description": (r["actor_desc"] or f"Threat Actor: {a}")[:120]}
                 if m:
                     nodes[m] = {"id": m, "label": "Malware",
-                                "description": (r["mal_desc"] or "")[:120]}
+                                "description": (r["mal_desc"] or f"Malware: {m}")[:120]}
                 if a and m:
                     edges.append({"source": a, "target": m, "label": "USES"})
 
             # ── 2. ThreatActor ──► Technique (USES) ──
             res2 = session.run("""
                 MATCH (a:ThreatActor)-[:USES]->(t:Technique)
-                WITH a, collect(t)[0..2] AS sample_techs
-                UNWIND sample_techs AS t
-                RETURN a.name AS actor, t.id AS tech_id,
-                       t.name AS tech_name, t.description AS tech_desc
+                RETURN a.name AS actor, coalesce(t.name, t.id) AS tech_name,
+                       t.id AS tech_id, t.description AS tech_desc
+                LIMIT 300
             """)
             for r in res2:
-                a    = r["actor"]
-                tid  = r["tech_id"] or ""
-                name = r["tech_name"] or tid
+                a = r["actor"]
+                tname = r["tech_name"] or r["tech_id"]
+                tid = r["tech_id"] or tname
                 if a and a not in nodes:
-                    nodes[a] = {"id": a, "label": "ThreatActor", "description": ""}
-                if tid:
-                    nodes[tid] = {"id": tid, "label": "Technique",
-                                  "description": f"{name}: {(r['tech_desc'] or '')[:100]}"}
+                    nodes[a] = {"id": a, "label": "ThreatActor", "description": f"Threat Actor: {a}"}
+                if tname:
+                    nodes[tname] = {"id": tname, "label": "Technique",
+                                    "description": f"Technique {tid}: {(r['tech_desc'] or '')[:100]}"}
                     if a:
-                        edges.append({"source": a, "target": tid, "label": "USES"})
+                        edges.append({"source": a, "target": tname, "label": "USES"})
 
             # ── 3. IOC ──► Malware (INDICATES) ─────
             res3 = session.run("""
                 MATCH (i:IOC)-[:INDICATES]->(m:Malware)
-                WITH m, collect(i)[0..3] AS sampled
-                UNWIND sampled AS i
-                RETURN i.value AS ioc, i.type AS ioc_type,
-                       i.first_seen AS first_seen, m.name AS malware
+                RETURN i.value AS ioc, i.type AS ioc_type, m.name AS malware
+                LIMIT 200
             """)
             for r in res3:
                 ioc = r["ioc"]
-                m   = r["malware"]
+                m = r["malware"]
                 if ioc:
                     nodes[ioc] = {"id": ioc, "label": "IOC",
-                                  "description": f"Type: {r['ioc_type'] or 'unknown'} | First seen: {r['first_seen'] or '?'}"}
+                                  "description": f"IOC Type: {r['ioc_type'] or 'network'}"}
                 if m and m not in nodes:
-                    nodes[m] = {"id": m, "label": "Malware", "description": ""}
+                    nodes[m] = {"id": m, "label": "Malware", "description": f"Malware: {m}"}
                 if ioc and m:
                     edges.append({"source": ioc, "target": m, "label": "INDICATES"})
 
-            # ── 4. CVE nodes ──────────
-            CVE_EDGES = [
-                ("WannaCry", "CVE-2017-0144"), ("WannaCry", "CVE-2017-0145"),
-                ("NotPetya", "CVE-2017-0144"), ("Industroyer2", "CVE-2022-30190"),
-                ("Cobalt Strike", "CVE-2021-44228"), ("Cobalt Strike", "CVE-2021-40444"),
-                ("BlackCat", "CVE-2021-31207"), ("BlackByte", "CVE-2022-26134"),
-                ("TrickBot", "CVE-2020-0796"), ("Emotet", "CVE-2017-11882"),
-                ("LockBit", "CVE-2023-4966"), ("BlackEnergy", "CVE-2014-4114"),
-                ("Lazarus", "CVE-2021-44228"), ("MATA", "CVE-2021-26855"),
-                ("PlugX", "CVE-2023-23397"), ("Zebrocy", "CVE-2021-34473")
-            ]
-            for malware_name, cve_id in CVE_EDGES:
-                nodes[cve_id] = {"id": cve_id, "label": "CVE", "description": "Vulnerability"}
-                if malware_name in nodes:
-                    edges.append({"source": malware_name, "target": cve_id, "label": "EXPLOITS"})
-
-            if len(nodes) > 0:
-                return {"nodes": list(nodes.values()), "edges": edges}
+            # ── 4. Malware ──► CVE (EXPLOITS) ──────
+            res4 = session.run("""
+                MATCH (m:Malware)-[:EXPLOITS]->(c:CVE)
+                RETURN m.name AS malware, c.id AS cve
+                LIMIT 100
+            """)
+            for r in res4:
+                m, c = r["malware"], r["cve"]
+                if c:
+                    nodes[c] = {"id": c, "label": "CVE", "description": f"Vulnerability: {c}"}
+                if m and m not in nodes:
+                    nodes[m] = {"id": m, "label": "Malware", "description": f"Malware: {m}"}
+                if m and c:
+                    edges.append({"source": m, "target": c, "label": "EXPLOITS"})
     except Exception as e:
         print("[Neo4j warning] /graph-data query error:", e)
 
-    # Rich default graph so Knowledge Graph is NEVER blank
-    fb_nodes = [
-        {"id":"APT28","label":"ThreatActor","description":"Russian GRU military intelligence (Fancy Bear)"},
-        {"id":"Lazarus Group","label":"ThreatActor","description":"North Korean RGB reconnaissance & crypto heist unit"},
-        {"id":"APT41","label":"ThreatActor","description":"Chinese MSS dual-mission espionage & cybercrime syndicate"},
-        {"id":"Sandworm","label":"ThreatActor","description":"Russian GRU Unit 74455 targeting ICS/power grids"},
-        {"id":"FIN7","label":"ThreatActor","description":"Carbanak criminal syndicate targeting retail & hospitality"},
-        {"id":"Volt Typhoon","label":"ThreatActor","description":"Chinese state-sponsored living-off-the-land actor"},
-        {"id":"OilRig","label":"ThreatActor","description":"Iranian cyber espionage targeting Middle East telecom & government"},
-        {"id":"Turla","label":"ThreatActor","description":"Russian FSB sophisticated espionage group (Waterbug)"},
-        {"id":"Cobalt Strike","label":"Malware","description":"Adversary simulation & C2 post-exploitation agent"},
-        {"id":"Mimikatz","label":"Malware","description":"Windows memory LSASS credential extraction utility"},
-        {"id":"Emotet","label":"Malware","description":"Polymorphic banking trojan and modular malware distributor"},
-        {"id":"WannaCry","label":"Malware","description":"Global ransomware cryptoworm leveraging MS17-010 EternalBlue"},
-        {"id":"NotPetya","label":"Malware","description":"Destructive wiper disguised as ransomware targeting Ukraine supply chains"},
-        {"id":"ShadowPad","label":"Malware","description":"Modular backdoor malware platform shared across Chinese APTs"},
-        {"id":"Industroyer2","label":"Malware","description":"Direct IEC-104 substation electrical grid attacking payload"},
-        {"id":"X-Agent","label":"Malware","description":"Multiplatform backdoor agent deployed in spearphishing campaigns"},
-        {"id":"BLINDINGCAN","label":"Malware","description":"Remote administration tool used in North Korean aerospace campaigns"},
-        {"id":"T1566","label":"Technique","description":"Phishing — Spearphishing Attachment"},
-        {"id":"T1059","label":"Technique","description":"Command and Scripting Interpreter (PowerShell, Bash)"},
-        {"id":"T1003","label":"Technique","description":"OS Credential Dumping (LSASS Memory)"},
-        {"id":"T1190","label":"Technique","description":"Exploit Public-Facing Application (VPN, Exchange)"},
-        {"id":"T1078","label":"Technique","description":"Valid Accounts (Domain Administrator)"},
-        {"id":"CVE-2024-21413","label":"CVE","description":"Microsoft Outlook RCE MonikerLink Vulnerability"},
-        {"id":"CVE-2024-3400","label":"CVE","description":"Palo Alto PAN-OS Command Injection Zero-Day"},
-        {"id":"CVE-2024-3821","label":"CVE","description":"Windows SmartScreen MoTW Defense Evasion"},
-        {"id":"CVE-2021-44228","label":"CVE","description":"Log4Shell — Apache Log4j JNDI Remote Code Execution"},
-        {"id":"CVE-2017-0144","label":"CVE","description":"EternalBlue — Microsoft SMBv1 Remote Code Execution"},
-        {"id":"185.220.101.47","label":"IOC","description":"Active APT28 Tor Exit Node & C2 Beacon IP"},
-        {"id":"194.165.16.11","label":"IOC","description":"Sandworm Industroyer C2 Controller Server"},
-        {"id":"45.142.212.100","label":"IOC","description":"Conti/BlackBasta Ransomware Payload Host"}
-    ]
-    fb_edges = [
-        {"source":"APT28","target":"X-Agent","label":"USES"},
-        {"source":"APT28","target":"Mimikatz","label":"USES"},
-        {"source":"APT28","target":"T1566","label":"USES"},
-        {"source":"APT28","target":"185.220.101.47","label":"USES"},
-        {"source":"Lazarus Group","target":"BLINDINGCAN","label":"USES"},
-        {"source":"Lazarus Group","target":"WannaCry","label":"USES"},
-        {"source":"Lazarus Group","target":"T1059","label":"USES"},
-        {"source":"APT41","target":"ShadowPad","label":"USES"},
-        {"source":"APT41","target":"Cobalt Strike","label":"USES"},
-        {"source":"APT41","target":"CVE-2024-3821","label":"EXPLOITS"},
-        {"source":"Sandworm","target":"Industroyer2","label":"USES"},
-        {"source":"Sandworm","target":"NotPetya","label":"USES"},
-        {"source":"Sandworm","target":"194.165.16.11","label":"USES"},
-        {"source":"FIN7","target":"Mimikatz","label":"USES"},
-        {"source":"FIN7","target":"Cobalt Strike","label":"USES"},
-        {"source":"Volt Typhoon","target":"CVE-2024-3400","label":"EXPLOITS"},
-        {"source":"Volt Typhoon","target":"T1078","label":"USES"},
-        {"source":"WannaCry","target":"CVE-2017-0144","label":"EXPLOITS"},
-        {"source":"Cobalt Strike","target":"CVE-2021-44228","label":"EXPLOITS"}
-    ]
-    return {"nodes": fb_nodes, "edges": fb_edges}
+    # If Neo4j has fewer than 60 nodes/edges, enrich from datasets!
+    if len(nodes) < 60 or len(edges) < 60:
+        import os, pandas as pd
+        csv_path = "backup/datasets/mitre_relationships.csv"
+        if not os.path.exists(csv_path):
+            csv_path = "datasets/mitre_relationships.csv"
+        if os.path.exists(csv_path):
+            try:
+                df = pd.read_csv(csv_path)
+                for _, r in df[df["target_type"] == "Malware"].head(160).iterrows():
+                    s, t = str(r["source"]), str(r["target"])
+                    if s not in nodes:
+                        nodes[s] = {"id": s, "label": "ThreatActor", "description": f"Adversary: {s}"}
+                    if t not in nodes:
+                        nodes[t] = {"id": t, "label": "Malware", "description": f"Malware: {t}"}
+                    edges.append({"source": s, "target": t, "label": "USES"})
+
+                for _, r in df[df["target_type"] == "Technique"].head(160).iterrows():
+                    s, t = str(r["source"]), str(r["target"])
+                    tid = str(r.get("tech_id", ""))
+                    if s not in nodes:
+                        nodes[s] = {"id": s, "label": "ThreatActor", "description": f"Adversary: {s}"}
+                    if t not in nodes:
+                        nodes[t] = {"id": t, "label": "Technique", "description": f"MITRE Technique {tid}: {t}"}
+                    edges.append({"source": s, "target": t, "label": "USES"})
+            except Exception as ex:
+                print("Enrichment error:", ex)
+
+        # Enrich IOCs
+        iocs_path = "backup/datasets/iocs.csv"
+        if not os.path.exists(iocs_path):
+            iocs_path = "datasets/iocs.csv"
+        if os.path.exists(iocs_path):
+            try:
+                idf = pd.read_csv(iocs_path).dropna(subset=["ioc", "malware"])
+                for _, r in idf.head(50).iterrows():
+                    ioc, mal = str(r["ioc"]), str(r["malware"])
+                    itype = str(r.get("ioc_type", "domain"))
+                    if ioc not in nodes:
+                        nodes[ioc] = {"id": ioc, "label": "IOC", "description": f"{itype.upper()}: {ioc}"}
+                    if mal not in nodes:
+                        nodes[mal] = {"id": mal, "label": "Malware", "description": f"Malware: {mal}"}
+                    edges.append({"source": ioc, "target": mal, "label": "INDICATES"})
+            except Exception:
+                pass
+
+        # Enrich CVEs
+        CVE_LINKS = [
+            ("WannaCry", "CVE-2017-0144"), ("WannaCry", "CVE-2017-0145"),
+            ("NotPetya", "CVE-2017-0144"), ("Industroyer2", "CVE-2022-30190"),
+            ("Cobalt Strike", "CVE-2021-44228"), ("Cobalt Strike", "CVE-2021-40444"),
+            ("BlackCat", "CVE-2021-31207"), ("BlackByte", "CVE-2022-26134"),
+            ("TrickBot", "CVE-2020-0796"), ("Emotet", "CVE-2017-11882"),
+            ("LockBit", "CVE-2023-4966"), ("BlackEnergy", "CVE-2014-4114"),
+            ("Lazarus Group", "CVE-2021-44228"), ("PlugX", "CVE-2023-23397"),
+            ("Volt Typhoon", "CVE-2024-3400"), ("APT29", "CVE-2024-21413"),
+            ("APT41", "CVE-2024-3821"), ("Carbanak", "CVE-2019-0708"),
+            ("Sandworm", "CVE-2022-30190"), ("FIN7", "CVE-2017-0199")
+        ]
+        for src, cve in CVE_LINKS:
+            if cve not in nodes:
+                nodes[cve] = {"id": cve, "label": "CVE", "description": f"Exploited Vulnerability: {cve}"}
+            if src not in nodes:
+                nodes[src] = {"id": src, "label": "ThreatActor", "description": f"Entity: {src}"}
+            edges.append({"source": src, "target": cve, "label": "EXPLOITS"})
+
+    # Deduplicate edges
+    seen_edges = set()
+    dedup_edges = []
+    for e in edges:
+        key = (e["source"], e["target"], e.get("label", ""))
+        if key not in seen_edges and e["source"] in nodes and e["target"] in nodes:
+            seen_edges.add(key)
+            dedup_edges.append(e)
+
+    return {"nodes": list(nodes.values()), "edges": dedup_edges}
 
 
 
