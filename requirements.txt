@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pandas
+requests
+httpx
+python-multipart
+neo4j
+groq
+langchain
+langchain-groq
+langgraph
+python-dotenv
+scikit-learn

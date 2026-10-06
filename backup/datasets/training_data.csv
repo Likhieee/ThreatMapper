@@ -1,0 +1,51 @@
+actor,cve_count,ioc_count,otx_mentions,risk
+Scattered Spider,10,50,1,0
+UNC788,11,55,2,0
+Earth Lusca,12,60,3,0
+Confucius,13,65,4,0
+MONSOON,14,70,5,0
+MuddyWater,15,75,1,0
+Bouncing Golf,16,80,2,0
+Patchwork,17,85,3,0
+Sandworm Team,18,90,4,0
+Kimsuky,19,95,5,0
+APT41,20,100,1,0
+MoustachedBouncer,21,105,2,0
+Windshift,22,110,3,0
+LAPSUS$,23,115,4,0
+Dark Caracal,24,120,5,0
+WIRTE,25,125,1,1
+APT28,26,130,2,1
+PROMETHIUM,27,135,3,1
+APT-C-23,28,140,4,1
+Stolen Pencil,29,145,5,1
+Star Blizzard,30,150,1,1
+BITTER,31,155,2,1
+APT33,32,160,3,1
+Lazarus Group,33,165,4,1
+HEXANE,34,170,5,1
+OilRig,35,175,1,1
+Wizard Spider,36,180,2,1
+GOLD SOUTHFIELD,37,185,3,1
+FIN7,38,190,4,1
+Sandworm Team,39,195,5,1
+APT34,40,200,1,1
+Dragonfly 2.0,41,205,2,1
+CyberAv3ngers,42,210,3,1
+Dragonfly,43,215,4,1
+TEMP.Veles,44,220,5,1
+APT38,45,225,1,1
+ALLANITE,46,230,2,1
+FIN6,47,235,3,1
+GALLIUM,48,240,4,1
+Chimera,49,245,5,1
+HAFNIUM,50,250,1,1
+PittyTiger,51,255,2,1
+Scattered Spider,52,260,3,1
+Taidoor,53,265,4,1
+APT33,54,270,5,1
+Mustard Tempest,55,275,1,1
+FIN13,56,280,2,1
+Leviathan,57,285,3,1
+UNC2452,58,290,4,1
+BlackTech,59,295,5,1

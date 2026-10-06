@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+*.pem
+*.key
+
+# Node / React
+node_modules/
+threatmapper-react/build/
+
+# Logs & PIDs
+*.log
+*.pid
+api.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large data folders (not needed for runtime)
+cti-master/
+CTI-HAL-main/
