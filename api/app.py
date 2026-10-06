@@ -430,12 +430,11 @@ def scores():
 
     data = []
 
+    # Non-linear graded similarity based on shared malware count
+    overlap_map = {1: 32, 2: 48, 3: 65, 4: 78, 5: 86}
     for row in rows:
-
-        similarity = row["score"] * 25
-
-        if similarity > 100:
-            similarity = 100
+        cnt = row.get("score", 1)
+        similarity = overlap_map.get(cnt, min(95, 86 + cnt * 2))
 
         data.append({
 

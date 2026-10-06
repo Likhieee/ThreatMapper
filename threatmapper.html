@@ -1619,28 +1619,29 @@ function initPredictions(){
 
 async function loadPredictionsData(){
   try{
-    // Try scores from Neo4j API first
+    // Fetch predictions from API (primary for AI Prediction Engine)
+    const backendPreds = await fetch(API+'/predictions').then(r=>r.json()).catch(()=>null)
+                      || await fetch(BACKEND_API+'/predictions').then(r=>r.json()).catch(()=>null);
+    // Fallback to scores if predictions is unavailable
     const scores = await fetch(API+'/scores').then(r=>r.json()).catch(()=>null);
-    // Fallback to backend predictions
-    const backendPreds = await fetch(BACKEND_API+'/predictions').then(r=>r.json()).catch(()=>null);
 
     // Fill pred-cards
     const cards = document.getElementById('pred-cards');
     let items = [];
 
-    if(scores && Array.isArray(scores) && scores.length>0){
-      items = scores.map(s=>({
-        label: s.actor||s.name||'Unknown',
-        value: Math.round((s.score||s.risk_score||0)*100),
-        sub: 'THREAT SCORE',
-        color: (s.score||0) > 0.7 ? 'var(--red)' : (s.score||0) > 0.4 ? 'var(--orange)' : 'var(--yellow)'
-      }));
-    } else if(backendPreds && backendPreds.predictions){
+    if(backendPreds && backendPreds.predictions && Array.isArray(backendPreds.predictions)){
       items = backendPreds.predictions.map(p=>({
-        label: p.sector||p.actor||'Unknown',
-        value: p.risk||0,
-        sub: 'via '+(p.actor||'ML Model'),
+        label: p.sector || 'Unknown Sector',
+        value: p.risk || 0,
+        sub: 'via ' + (p.actor || 'Threat Actor') + ' (' + (p.confidence || 'HIGH') + ')',
         color: p.risk > 70 ? 'var(--red)' : p.risk > 40 ? 'var(--orange)' : 'var(--yellow)'
+      }));
+    } else if(scores && Array.isArray(scores) && scores.length>0){
+      items = scores.map(s=>({
+        label: (s.actor1 && s.actor2) ? `${s.actor1} ↔ ${s.actor2}` : (s.actor||s.name||'Unknown'),
+        value: Math.round(s.similarity ?? (s.score||0)*100),
+        sub: 'LINK SIMILARITY',
+        color: (s.similarity||0) > 70 ? 'var(--red)' : (s.similarity||0) > 40 ? 'var(--orange)' : 'var(--yellow)'
       }));
     }
 
